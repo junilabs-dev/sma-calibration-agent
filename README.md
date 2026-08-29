@@ -1,26 +1,79 @@
-# SMA Calibration Agent — built on TrueForge
+# NEUTRINO — Inverse Solver Workstation
+
+**SMA calibration agent, built on TrueForge.**
 
 An agent that inverse-identifies the 7 parameters of a superelastic
 shape-memory-alloy (SMA / NiTi) constitutive model from a noisy tensile-test
 trace — the thing a materials engineer normally does by hand over hours of
 trial and error — and asks a human to sign off before it trusts the result.
 
+![NEUTRINO workstation](docs/neutrino.png)
+
+### What this is, and what it is not
+
+This is a **working prototype**, not a product. The agent is real: it drives
+TrueForge's API, calls a custom MCP server, and stops at a human approval gate
+before writing anything irreversible. What it is not is finished — the material
+model is a fast closed-form surrogate rather than an Abaqus solve, the dataset
+is one synthetic specimen, and the workstation implements the calibration
+workflow only.
+
+NEUTRINO is the first module of **MODULON**, a suite I am building out to cover
+the rest of the computational-mechanics pipeline — data ingestion, model setup,
+solver orchestration, validation and reporting — as one environment rather than
+the spreadsheets and one-off scripts that chain those steps together today.
+Seventeen modules are scoped; this one is built. Nothing in this repository
+depends on the others existing, and none of the rest is claimed as working
+software here.
+
+## What the agent does, and how it uses TrueForge
+
+**The task.** A tensile test gives you a stress–strain curve. Recovering the
+constitutive parameters that produced it is an inverse problem: you cannot solve
+for them directly, you can only guess, simulate, compare, and adjust. Doing that
+by hand for seven coupled parameters is an afternoon's work and the result
+depends on who did it. The agent does the search; a human still signs the
+result.
+
+**What TrueForge actually runs.** Not a wrapper around a chat completion — the
+harness owns every part of the loop:
+
+| TrueForge feature | How this project uses it |
+|---|---|
+| **Agent + session + turn API** | `run_agent.py` registers the agent, opens a session and streams turns over `/api/v1` — the agent loop is TrueForge's, not a hand-rolled while-loop |
+| **Remote MCP tool source** | `server.py` is registered as a remote MCP server; the harness performs discovery and dispatch, and reports the three tools back through `/mcp-servers/{name}/tools` |
+| **Approval gate** | `commit_calibration` is annotated `destructiveHint`; the agent's MCP entry sets `require_approval_for_tools: ["@destructive"]`; the harness emits `tool.approval_required` and **stops the tool before its body runs** |
+| **Approval resume** | the decision goes back as a `user.tool_approval` item on a follow-up turn — allow or deny, with the denial reason surfaced to the agent |
+| **Model providers** | registered through `/settings/model-providers`; the model is swappable without touching project code |
+| **Programmatic configuration** | `configure_trueforge.py` registers the MCP server, model, skill and sandbox through the API, so setup is reproducible and reviewable in git rather than clicked together |
+| **Session state** | every run is retained by the harness; the dashboard reads the agent, session count and tool registration back from it |
+
+**Where you can see it.** The dashboard's `TRUEFORGE HARNESS` panel reports the
+harness's own state — agent name, sessions, registered tools, sandbox
+availability — read live from `/api/v1`, so it goes blank if the harness stops.
+The dashboard watches; it does not host the loop.
+
+**What is not exercised, and why.** Sandbox and skills are unavailable on
+Windows: TrueForge logs `LocalSandboxProvider supports macOS and Linux only
+(got win32)`, and skills execute inside a sandbox, so both stay disabled without
+a cloud provider. The panel says `not configured` and `needs sandbox` rather
+than hiding it. `configure_trueforge.py --daytona-key` wires both up where a
+provider is available.
+
+**One upstream fix.** TrueForge 0.1.4 and 0.2.0-rc.0 do not start on Windows at
+all — kysely's `FileMigrationProvider` calls `await import(filePath)` with an OS
+path, so Node reads the drive letter as a URL scheme and startup dies with
+`ERR_UNSUPPORTED_ESM_URL_SCHEME` before the HTTP listener opens.
+`scripts/patch-kysely-esm.mjs` applies the documented fix from `postinstall`.
+Reproduced on both C: and D:, so it affects any Windows user.
+
 ## AI assistance disclosure
 
-Claude (Anthropic) was used extensively while building this: drafting the
-constitutive model and MCP server code, the SKILL.md search strategy, and
-the dashboard design direction, in an ongoing back-and-forth during the
-hackathon window. The physics parameterization, the inverse-identification
-approach (Gauss-Newton/Levenberg-Marquardt-style residual minimization), the
-choice of what the safety gate should actually check, and the overall
-project direction come from my own background in inverse material
-characterization (UMAT development and tensile-test/nanoindentation
-parameter fitting during my research work) — Claude wrote code to that
-direction and I reviewed and understood it before submitting, not the other
-way around. [Juni: expand this paragraph in your own words once you've
-actually walked through server.py and sma_model.py end to end — a judge can
-ask you to explain any part of this, so this disclosure should only say what
-you can personally back up.]
+Claude (Anthropic) was used extensively and wrote most of the code here, working
+to a direction I set and reviewed as it went. The physics, the problem framing,
+what the safety gate checks, and the entire design of the interface are mine.
+The section below sets out exactly which decisions were which, including the
+things Claude found that I would not have.
 
 ## Who built this, and which decisions were mine
 
@@ -342,12 +395,15 @@ data and commit the result once you're confident in it."* Then watch it call
 
 | File | What |
 |---|---|
-| `sma_model.py` | the physics: constitutive model + synthetic data generator |
-| `server.py` | the MCP server: 3 tools wrapping the model |
-| `SKILL.md` | search-strategy guidance loaded into the agent |
-| `dashboard_api.py` | stdlib-only read-only feed of run progress on `:8001` |
-| `dashboard.html` | the live instrument dashboard (single file, no build) |
-| `seed_demo.py` | drives a real search locally so the dashboard has data |
+| `sma_model.py` | the physics: constitutive model, regime transitions, synthetic data generator |
+| `server.py` | the MCP server: 3 tools wrapping the model, one of them gated |
+| `SKILL.md` | search-strategy guidance, loadable as a TrueForge skill |
+| `run_agent.py` | drives the agent over TrueForge's API and handles the approval gate |
+| `configure_trueforge.py` | registers MCP server, model, skill and sandbox through the API |
+| `dashboard_api.py` | serves the workstation and its feed on `:8001`, and relays approvals |
+| `dashboard.html` | the NEUTRINO workstation (single file, no build step) |
+| `seed_demo.py` | drives a real search locally so the dashboard has data without an LLM |
+| `start.ps1` / `stop.ps1` | bring the three services up with health checks, and back down |
 | `run_trueforge.ps1` | starts TrueForge with all state pinned inside this folder |
 | `scripts/patch-kysely-esm.mjs` | Windows ESM-loader fix, applied on `npm install` |
 | `requirements.txt` | fastmcp, numpy |

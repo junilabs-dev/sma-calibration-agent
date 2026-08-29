@@ -1182,12 +1182,25 @@ document.querySelector('.nav').addEventListener('click', ev => {
   showPanes(key);
 });
 
-$('wstabs').addEventListener('click', ev => {
-  const b = ev.target.closest('button'); if (!b) return;
+function selectTab(name) {
+  const b = [...$('wstabs').children].find(t => t.dataset.tab === name);
+  if (!b) return false;
   for (const t of $('wstabs').children) t.classList.toggle('on', t === b);
   for (const n of document.querySelectorAll('.navitem')) n.classList.toggle('on', n.dataset.view === 'dashboard');
-  showPanes(b.dataset.tab);
+  showPanes(name);
+  return true;
+}
+
+$('wstabs').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  selectTab(b.dataset.tab);
+  location.hash = b.dataset.tab;
 });
+
+// Deep-linkable panels: useful for jumping straight to a view, and for
+// screenshotting one without clicking through to it.
+addEventListener('hashchange', () => selectTab(location.hash.slice(1)));
+if (location.hash) selectTab(location.hash.slice(1));
 
 // The button starts the same run_agent.py a terminal would; the harness still
 // holds the commit for approval, so this cannot push anything through the gate.
