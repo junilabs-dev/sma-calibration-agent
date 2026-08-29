@@ -22,6 +22,76 @@ actually walked through server.py and sma_model.py end to end — a judge can
 ask you to explain any part of this, so this disclosure should only say what
 you can personally back up.]
 
+## Who built this, and which decisions were mine
+
+<!-- Juni: everything below is what I can vouch for having watched it happen.
+     Replace the bracketed line with your own details before submitting — a
+     judge may ask, and this section should only claim what you can back up. -->
+
+**[Your name, what you study/do, and where — one or two lines, in your own words.]**
+
+My background is inverse material characterisation: UMAT development, and
+parameter fitting against tensile-test and nanoindentation data. That is the
+part of this project I brought rather than looked up — knowing that a
+superelastic NiTi trace is described by seven parameters, which of them a
+single load–unload cycle can actually constrain, what a physically admissible
+parameter set looks like, and what a fit has to clear before anyone should
+trust it.
+
+### The design direction is mine
+
+I wrote the original brief for the dashboard and every subsequent correction to
+it. The decisions that shaped what you see:
+
+- **An instrument, not a dashboard.** I ruled out the default AI-dashboard
+  look — the near-black card with one neon accent, rounded everything, generic
+  iconography — and asked for the control panel of a universal testing machine
+  instead: dense, calm, built for reading numbers under pressure. The palette
+  and the IBM Plex pairing were specified, not chosen for me.
+- **Do not fake the approval state.** TrueForge holds `commit_calibration`
+  before its body runs, so the progress feed has no signal for "a human is being
+  asked right now". I decided the UI would say so rather than invent a
+  confident-looking pending state, and that any inference would be labelled as
+  one. Everything downstream of that — the amber `inferred` state, the caption
+  admitting the limitation — follows from that call.
+- **Show the measurements, not just the plot.** I pushed back when the
+  experimental data existed only as plotted dots; the trace cursor, the raw
+  sample readout and the dataset provenance panel exist because I asked where
+  the numbers were.
+- **Show what the fit is judged against.** I asked on what basis a calibration
+  is validated, which is why the acceptance criteria are mirrored in the UI from
+  the gate `commit_calibration` actually enforces, evaluated live, rather than
+  described in prose.
+- **The harness has to be visible.** I noticed the demo showed a terminal and a
+  chart with no TrueForge anywhere, and that a judge would ask the same
+  question. That is why the run is driven through the harness's own API and why
+  the approval now surfaces in the dashboard instead of only in a terminal.
+- **The workstation restructure.** The five-zone layout — command bar,
+  navigation rail, central workspace, solver panel, status bar — came from a
+  brief I wrote specifying the layout, the information hierarchy and the
+  reference points (scientific instrumentation and mission control, explicitly
+  not crypto, gaming or consumer SaaS).
+
+I also drew the line on honesty in the chrome: the reference design carried
+invented hardware readouts and a fake ETA, and those are not in this build. A
+panel that reports fabricated numbers beside measured ones teaches a reader to
+trust neither.
+
+### What Claude did
+
+Claude (Anthropic) wrote most of the code in this repository, working to the
+direction above, and I reviewed it as it went. It also found things I would not
+have: that TrueForge cannot start on Windows at all because of an upstream
+`import()` bug in kysely, that `evaluate_model` returning the full predicted
+curve made the agent's context grow quadratically until a free-tier budget ran
+out, and that the residual means I had asked for were being averaged across
+regimes governed by different parameters — which Qodo then flagged
+independently.
+
+The honest boundary: the physics, the problem framing, the safety criteria and
+the entire design direction are mine; the implementation is largely Claude's,
+written to that direction and reviewed by me, not accepted unread.
+
 ## Qodo Code Review Evidence
 
 **Merged PR:** [#1 — Live calibration dashboard, local TrueForge harness, and a
