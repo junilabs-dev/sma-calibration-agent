@@ -24,19 +24,31 @@ you can personally back up.]
 
 ## Who built this, and which decisions were mine
 
-<!-- Juni: everything below is what I can vouch for having watched it happen.
-     Replace the bracketed line with your own details before submitting — a
-     judge may ask, and this section should only claim what you can back up. -->
+<!-- Juni: check this reads the way you'd say it, and correct anything I've
+     put slightly wrong — a judge may ask, and it should only claim what you
+     can back up in conversation. -->
 
-**[Your name, what you study/do, and where — one or two lines, in your own words.]**
+**Junaid Alam** — Mechanical Engineering, Panjab University, with research
+internships at NIT Trichy and IIT Ropar.
 
-My background is inverse material characterisation: UMAT development, and
-parameter fitting against tensile-test and nanoindentation data. That is the
-part of this project I brought rather than looked up — knowing that a
-superelastic NiTi trace is described by seven parameters, which of them a
-single load–unload cycle can actually constrain, what a physically admissible
-parameter set looks like, and what a fit has to clear before anyone should
-trust it.
+I work at the intersection of computational mechanics and material modelling:
+finite-element analysis in Abaqus, UMAT/VUMAT development, material
+characterisation including nanoindentation and Oliver–Pharr calibration, and
+inverse identification of material parameters from experimental data.
+
+What interests me is not running a simulation but the whole pipeline around it —
+experimental data → material model → parameter identification → simulation →
+validation. Most of that chain is still done by hand, in spreadsheets and
+one-off scripts, by people who would rather be doing the engineering.
+
+That is the part of this project I brought rather than looked up: that a
+superelastic NiTi trace is described by seven parameters, which of them a single
+load–unload cycle can actually constrain, what a physically admissible parameter
+set looks like, and what a fit has to clear before anyone should trust it. It is
+also why the agent is gated rather than autonomous — a material card is
+something a person signs off on, and an inverse problem with weakly identified
+parameters is exactly the case where an unsupervised optimiser will hand you a
+confident, wrong answer.
 
 ### The design direction is mine
 
