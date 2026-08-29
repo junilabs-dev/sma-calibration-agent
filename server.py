@@ -26,9 +26,12 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
+import numpy as np
+
 from fastmcp import FastMCP
 
 from sma_model import (
+    transition_strains,
     PARAM_NAMES,
     evaluate_superelastic,
     generate_synthetic_experiment,
@@ -109,10 +112,15 @@ def evaluate_model(
     start/finish stress, the loading plateau); sig_SA_s/sig_SA_f in MPa
     (reverse transform start/finish stress, the unloading plateau). Required
     ordering: sig_AS_f > sig_AS_s > sig_SA_s > sig_SA_f > 0.
-    Returns predicted_stress_mpa (same length/order as the experimental
-    trace) and rmse_mpa, or valid=False with a specific reason if the guess
-    is not physically realizable under this test's strain range -- read that
-    reason and adjust the parameter it names, don't just retry blindly."""
+    Returns rmse_mpa, rmse_pct_of_peak, and a residual summary: where the fit is
+    worst, plus the signed mean error in each regime of the curve separately
+    (elastic run-up, forward plateau, post-transformation climb, reverse
+    plateau), with the parameter governing each. Move the parameter named for
+    whichever regime is furthest from zero -- a regime's mean is positive when
+    the model sits above the measurement there.
+    Returns valid=False with a specific reason if the guess is not physically
+    realizable under this test's strain range -- read that reason and adjust the
+    parameter it names, don't just retry blindly."""
     params = _params_from_args(E_A, E_M, eps_L, sig_AS_s, sig_AS_f, sig_SA_s, sig_SA_f)
     try:
         pred = evaluate_superelastic(params, _STRAIN)
@@ -120,18 +128,59 @@ def evaluate_model(
         return {"valid": False, "error": str(e)}
 
     err = rmse(pred, _STRESS)
+    residual = pred - _STRESS
+    peak_idx = int(_STRAIN.argmax())
+    worst = int(abs(residual).argmax())
+
+    # The full 119-point curve goes to the dashboard, not to the agent. Returning
+    # it here put ~120 numbers into context on every iteration, and a search runs
+    # dozens of iterations -- enough to exhaust a free-tier token budget before
+    # converging.
+    #
+    # The means are per regime, not per branch. A branch-wide mean averages the
+    # elastic run-up, the plateau and the post-transformation climb together --
+    # regions governed by E_A, the transformation stresses and E_M respectively --
+    # so it can read positive while the plateau itself sits low, pointing the
+    # search at the wrong parameter.
+    t = transition_strains(params)
+    on_load = np.arange(len(_STRAIN)) <= peak_idx
+
+    def mean_over(mask) -> float | None:
+        return round(float(residual[mask].mean()), 2) if mask.any() else None
+
+    regions = {
+        "elastic_loading": on_load & (_STRAIN < t["eps1"]),
+        "plateau_loading": on_load & (_STRAIN >= t["eps1"]) & (_STRAIN <= t["eps2"]),
+        "post_plateau_loading": on_load & (_STRAIN > t["eps2"]),
+        "plateau_unloading": ~on_load & (_STRAIN >= t["eps4"]) & (_STRAIN <= t["eps3"]),
+    }
+
     result = {
         "valid": True,
-        "predicted_stress_mpa": [round(float(x), 3) for x in pred],
         "rmse_mpa": round(err, 3),
         "rmse_pct_of_peak": round(100 * err / _PEAK, 3),
         "pass_threshold_pct": _RMSE_PASS_PCT_OF_PEAK,
+        "residual_summary": {
+            "worst_abs_error_mpa": round(float(abs(residual[worst])), 2),
+            "worst_at_strain": round(float(_STRAIN[worst]), 5),
+            "worst_on_branch": "loading" if worst <= peak_idx else "unloading",
+            "mean_signed_error_by_region_mpa": {k: mean_over(m) for k, m in regions.items()},
+            "governed_by": {
+                "elastic_loading": "E_A",
+                "plateau_loading": "sig_AS_s (level) and sig_AS_f (tilt)",
+                "post_plateau_loading": "E_M",
+                "plateau_unloading": "sig_SA_s (level) and sig_SA_f (tilt)",
+            },
+            "note": "Regions are cut at this guess's own transition strains. Signed: "
+                    "positive means the model sits above the measurement in that region. "
+                    "null means the guess leaves that region empty.",
+        },
     }
     _write_progress({
         "type": "evaluate",
         "params": params,
         "rmse_pct_of_peak": result["rmse_pct_of_peak"],
-        "predicted_stress_mpa": result["predicted_stress_mpa"],
+        "predicted_stress_mpa": [round(float(x), 3) for x in pred],
         "at_utc": datetime.now(timezone.utc).isoformat(),
     })
     return result

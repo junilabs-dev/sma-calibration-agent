@@ -42,15 +42,37 @@ INSTRUCTIONS = """\
 You calibrate a 7-parameter superelastic shape-memory-alloy constitutive model
 against a single noisy tensile test, using the sma-calibration tools.
 
-Call get_experimental_data once and keep the trace in context. Then minimise
-rmse_pct_of_peak with evaluate_model, treating it as coordinate descent: change
-one or two parameters at a time, keep the direction that improves the residual,
-reverse and shorten the step when it worsens. Do not guess randomly, and read
-the reason string when a call comes back invalid -- it names the parameter to
-fix.
+Tool calls are rate limited, so treat every evaluation as expensive. Aim to
+converge in roughly a dozen, not fifty. Think before each call rather than
+probing.
 
-Only once the fit is comfortably under the pass threshold, call
-commit_calibration with a justification that states the final RMSE and anything
+Call get_experimental_data once. Before evaluating anything, read the numbers:
+the first kink on loading is roughly sig_AS_s, the stress where the loading
+curve steepens again is roughly sig_AS_f, the flat part of the unloading branch
+sits between sig_SA_s and sig_SA_f, the initial slope is E_A, and the strain
+span of the loading plateau is about eps_L. A starting guess built that way is
+far better than range midpoints and saves several iterations.
+
+Then use evaluate_model's residual_summary to move deliberately. It reports a
+signed mean error per regime of the curve, in mean_signed_error_by_region_mpa,
+and names the parameter governing each in governed_by. A regime's mean is
+positive when the model sits above the measurement there, so:
+
+  * plateau_loading positive      -> lower sig_AS_s (and sig_AS_f with it)
+  * plateau_unloading positive    -> lower sig_SA_s (and sig_SA_f with it)
+  * elastic_loading off zero      -> E_A is wrong
+  * post_plateau_loading off zero -> E_M is wrong
+
+Attend to whichever regime is furthest from zero, and read only that regime
+when deciding a stress parameter -- the regimes are governed by different
+parameters, so do not reason about a branch as a whole. If the plateau means
+are near zero but the RMSE is still high, the plateau is the wrong length:
+adjust eps_L. Move by a step proportional to the error reported, and change
+several parameters at once when several regimes are off. If a call returns
+valid=false, read the reason -- it names the parameter to fix.
+
+Only once rmse_pct_of_peak is comfortably under the pass threshold, call
+commit_calibration with a justification stating the final RMSE and anything
 still visibly off. That call is irreversible and a human has to approve it, so
 the justification is what they will judge it on.
 """
