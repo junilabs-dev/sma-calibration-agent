@@ -26,6 +26,81 @@ Seventeen modules are scoped; this one is built. Nothing in this repository
 depends on the others existing, and none of the rest is claimed as working
 software here.
 
+## Architecture
+
+TrueForge is the host. It is what lets a model drive the solver at all: without
+the harness this is a Python module you call by hand; with it, the search is
+driven by a model that reads the residual and decides what to change next.
+
+```
+                    ┌──────────────────────────────┐
+                    │        LLM  (Gemini)         │
+                    └──────────────┬───────────────┘
+                                   │  model calls
+                    ┌──────────────▼───────────────┐
+                    │      TRUEFORGE  :8790        │   ← the host
+                    │  agent loop · sessions ·     │
+                    │  MCP dispatch · APPROVAL GATE│
+                    └───┬──────────────────────┬───┘
+        registers/drives │                      │ tool calls
+                         │                      │
+        ┌────────────────▼──────┐   ┌───────────▼─────────────┐
+        │  run_agent.py         │   │  server.py   :8000/mcp  │
+        │  configure_trueforge  │   │  ┌───────────────────┐  │
+        └────────────┬──────────┘   │  │ get_experimental… │  │
+                     │              │  │ evaluate_model    │  │
+                     │              │  │ commit_calibration│◄─┼── destructiveHint
+                     │              │  └─────────┬─────────┘  │    (gated)
+                     │              └────────────┼────────────┘
+                     │                           │ writes
+                     │              ┌────────────▼────────────┐
+                     │              │  progress_state.json    │
+                     │              │  sma_model.py (physics) │
+                     │              └────────────┬────────────┘
+                     │ approval handshake        │ polled
+        ┌────────────▼───────────────────────────▼────────────┐
+        │        dashboard_api.py  →  NEUTRINO  :8001         │
+        │   charts · gauges · residuals · APPROVE / DENY      │
+        └─────────────────────────────────────────────────────┘
+```
+
+The same run can be started from either end — the workstation's RUN SOLVER
+button or TrueForge's own chat — because both go through the harness.
+`run_agent.py` is what wires them together, registering the agent, opening a
+session and streaming turns over the HTTP API. The only difference between the
+two is where the approval prompt appears.
+
+**The gate, precisely.** `commit_calibration` is annotated `destructiveHint` in
+the MCP server. The agent's MCP entry sets
+`require_approval_for_tools: ["@destructive"]`. TrueForge matches the annotation,
+emits `tool.approval_required`, and stops the tool **before its Python body
+runs**. Nothing continues until a `user.tool_approval` decision is posted back,
+and no decision is not an approval — the wait times out into a denial.
+
+## Where this came from
+
+NEUTRINO is a prototype, and a deliberate one. The solver framing, the
+parameterisation, the acceptance criteria and the search strategy come from my
+own research work rather than from a library:
+
+- around a year working on inverse solvers, in a **research workflow** — scripts
+  and notebooks, not a product
+- around six months formulating this particular solver framework
+- one to two months building **MODULON**, the wider suite this belongs to
+
+My earlier inverse-solver work targeted a different material problem. NEUTRINO
+uses superelastic NiTi as its test subject and is built against **known data** —
+a synthetic trace generated from a parameter set the agent never sees. For a
+prototype that is the point: the question is whether the search recovers an
+answer you already know, which is exactly what makes the result checkable. The
+[sensitivity analysis](#for-judges--how-to-verify-this-in-5-minutes) below only
+means anything because the truth is available to compare against.
+
+Every MODULON module shares this interface language deliberately. The suite is
+aimed at engineers reading numbers under pressure, so the priorities stay the
+same throughout: dense but organised, every figure traceable to where it came
+from, and nothing on screen the system cannot actually observe.
+
 ## What the agent does, and how it uses TrueForge
 
 **The task.** A tensile test gives you a stress–strain curve. Recovering the
