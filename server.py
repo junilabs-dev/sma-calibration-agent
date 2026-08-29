@@ -109,10 +109,12 @@ def evaluate_model(
     start/finish stress, the loading plateau); sig_SA_s/sig_SA_f in MPa
     (reverse transform start/finish stress, the unloading plateau). Required
     ordering: sig_AS_f > sig_AS_s > sig_SA_s > sig_SA_f > 0.
-    Returns predicted_stress_mpa (same length/order as the experimental
-    trace) and rmse_mpa, or valid=False with a specific reason if the guess
-    is not physically realizable under this test's strain range -- read that
-    reason and adjust the parameter it names, don't just retry blindly."""
+    Returns rmse_mpa, rmse_pct_of_peak, and a residual summary saying where the
+    fit is worst and whether each plateau sits above or below the measurement --
+    use the signed means to decide which direction to move a stress parameter.
+    Returns valid=False with a specific reason if the guess is not physically
+    realizable under this test's strain range -- read that reason and adjust the
+    parameter it names, don't just retry blindly."""
     params = _params_from_args(E_A, E_M, eps_L, sig_AS_s, sig_AS_f, sig_SA_s, sig_SA_f)
     try:
         pred = evaluate_superelastic(params, _STRAIN)
@@ -120,18 +122,34 @@ def evaluate_model(
         return {"valid": False, "error": str(e)}
 
     err = rmse(pred, _STRESS)
+    residual = pred - _STRESS
+    peak_idx = int(_STRAIN.argmax())
+    worst = int(abs(residual).argmax())
+
+    # The full 119-point curve goes to the dashboard, not to the agent. Returning
+    # it here put ~120 numbers into context on every iteration, and a search runs
+    # dozens of iterations -- enough to exhaust a free-tier token budget before
+    # converging. A signed residual summary is what actually steers the search:
+    # which branch is worst, and whether each plateau sits high or low.
     result = {
         "valid": True,
-        "predicted_stress_mpa": [round(float(x), 3) for x in pred],
         "rmse_mpa": round(err, 3),
         "rmse_pct_of_peak": round(100 * err / _PEAK, 3),
         "pass_threshold_pct": _RMSE_PASS_PCT_OF_PEAK,
+        "residual_summary": {
+            "worst_abs_error_mpa": round(float(abs(residual[worst])), 2),
+            "worst_at_strain": round(float(_STRAIN[worst]), 5),
+            "worst_on_branch": "loading" if worst <= peak_idx else "unloading",
+            "mean_signed_error_loading_mpa": round(float(residual[:peak_idx + 1].mean()), 2),
+            "mean_signed_error_unloading_mpa": round(float(residual[peak_idx + 1:].mean()), 2),
+            "note": "signed: positive means the model sits above the measurement there",
+        },
     }
     _write_progress({
         "type": "evaluate",
         "params": params,
         "rmse_pct_of_peak": result["rmse_pct_of_peak"],
-        "predicted_stress_mpa": result["predicted_stress_mpa"],
+        "predicted_stress_mpa": [round(float(x), 3) for x in pred],
         "at_utc": datetime.now(timezone.utc).isoformat(),
     })
     return result
