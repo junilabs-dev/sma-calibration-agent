@@ -156,6 +156,15 @@ def main() -> int:
 
         provider_type, env_var, default_id, default_name = MODEL_PROVIDERS[args.model]
         key = args.model_key or os.environ.get(env_var)
+        if not key and args.model_id:
+            # Swapping models on an already-configured provider shouldn't demand
+            # the key again. Responses redact it, and PUTting a redacted value
+            # keeps the stored one -- so the switch works without handling the
+            # secret at all.
+            stored = {p.get("name"): p for p in call("GET", "/settings/model-providers").get("data", [])}
+            if provider_type in stored:
+                key = stored[provider_type]["manifest"]["auth"]["api_key"]
+                print(f"  (reusing the stored {provider_type} key)")
         if key:
             model_id = args.model_id or default_id
             what = upsert("model-providers", provider_type, {
