@@ -24,6 +24,16 @@ surfaced by --status:
   * A skill is fetched from a git remote (the manifest takes a GitHub/GitLab
     URL, a ref and a path) -- it is not read off the local disk, so SKILL.md
     has to be pushed before it can be registered.
+
+Three things that cost other people time, worth knowing before you start:
+  * A Daytona key needs BOTH `Sandboxes: Read+Write` AND `Snapshots:
+    Read+Write`. On save, TrueForge immediately POSTs to Daytona's snapshots
+    endpoint to register its sandbox image; without Snapshots:Write that 403
+    is reported as "Daytona rejected the API key -- check the credentials",
+    which sends you off checking a key that was fine all along.
+  * A model provider manifest must list at least one model. Registering only
+    an api_key is a 400.
+  * Every response is wrapped in {"data": ...}.
 """
 
 from __future__ import annotations
@@ -42,10 +52,13 @@ MCP_NAME = "sma-calibration"
 MCP_URL = os.environ.get("SMA_MCP_URL", "http://localhost:8000/mcp")
 SKILL_NAME = "sma-material-calibration"
 
-MODEL_PROVIDERS = {  # flag value -> (manifest type, env var)
-    "anthropic": ("anthropic", "ANTHROPIC_API_KEY"),
-    "openai": ("openai", "OPENAI_API_KEY"),
-    "gemini": ("google-gemini", "GEMINI_API_KEY"),
+# manifest type, env var, default upstream model id, local name.
+# A provider manifest must list at least one model (`models`, minItems 1) -- a
+# provider registered with only an api_key is rejected with a 400.
+MODEL_PROVIDERS = {
+    "gemini": ("google-gemini", "GEMINI_API_KEY", "gemini-2.0-flash", "gemini-2.0-flash"),
+    "anthropic": ("anthropic", "ANTHROPIC_API_KEY", "claude-sonnet-4-5-20250929", "claude-sonnet-4-5"),
+    "openai": ("openai", "OPENAI_API_KEY", "gpt-4o", "gpt-4o"),
 }
 
 
@@ -113,8 +126,10 @@ def report() -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--status", action="store_true", help="report configuration and exit")
-    ap.add_argument("--model", choices=sorted(MODEL_PROVIDERS), default="anthropic")
+    ap.add_argument("--model", choices=sorted(MODEL_PROVIDERS), default="gemini")
     ap.add_argument("--model-key", help="model provider API key (else read from env)")
+    ap.add_argument("--model-id", help="override the upstream model id, e.g. gemini-2.5-pro")
+    ap.add_argument("--model-name", help="override the local name the agent refers to")
     ap.add_argument("--skill-repo", help="https://github.com/<owner>/<repo> holding SKILL.md")
     ap.add_argument("--skill-ref", default="main")
     ap.add_argument("--skill-path", help="directory within the repo, if not the root")
@@ -137,12 +152,20 @@ def main() -> int:
         })
         print(f"  mcp server    {what}  ({MCP_URL})")
 
-        provider_type, env_var = MODEL_PROVIDERS[args.model]
+        provider_type, env_var, default_id, default_name = MODEL_PROVIDERS[args.model]
         key = args.model_key or os.environ.get(env_var)
         if key:
-            what = upsert("model-providers", provider_type,
-                          {"type": provider_type, "auth": {"api_key": key}})
-            print(f"  model         {what}  ({provider_type})")
+            model_id = args.model_id or default_id
+            what = upsert("model-providers", provider_type, {
+                "type": provider_type,
+                "auth": {"api_key": key},
+                "models": [{
+                    "model_id": model_id,
+                    "name": args.model_name or default_name,
+                    "properties": {},
+                }],
+            })
+            print(f"  model         {what}  ({provider_type} / {model_id})")
         else:
             print(f"  model         skipped  (no --model-key and ${env_var} unset)")
 
