@@ -262,14 +262,24 @@ const view = {
 // below must not drift with skew between the agent host and this page.
 let lastChangeAt = performance.now();
 
+// One failed poll is not a lost connection. The writer renames the state file
+// into place, so a read can still lose a race with it, and a single transient
+// failure should not blank a working dashboard mid-demo. Hold the last good
+// state and only report NO SIGNAL once failures persist.
+const OFFLINE_AFTER_FAILURES = 3;
+let consecutiveFailures = 0;
+
 async function poll() {
   try {
     const r = await fetch(API, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
-    apply(await r.json());
+    const data = await r.json();
+    apply(data);
+    consecutiveFailures = 0;
     view.linked = true;
   } catch {
-    view.linked = false;
+    consecutiveFailures++;
+    if (consecutiveFailures >= OFFLINE_AFTER_FAILURES) view.linked = false;
   }
   render();
 }

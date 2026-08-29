@@ -18,9 +18,14 @@ $root = $PSScriptRoot
 $py   = Join-Path $root '.venv\Scripts\python.exe'
 $logs = Join-Path $root '.logs'
 
+# run_trueforge.ps1 honours TRUEFORGE_PORT, so the health check and the printed
+# URL have to resolve it the same way -- otherwise a custom port starts fine and
+# the launcher sits here failing a check against 8790.
+$tfPort = if ($env:TRUEFORGE_PORT) { $env:TRUEFORGE_PORT } else { '8790' }
+
 function Test-Port($port) {
     try { (Invoke-WebRequest "http://localhost:$port/" -TimeoutSec 3 -UseBasicParsing).StatusCode -gt 0 }
-    catch { $_.Exception.Response -ne $null }   # a 404 still means something answered
+    catch { $null -ne $_.Exception.Response }   # a 404 still means something answered
 }
 
 function Start-Piece($name, $exe, $argList, $log) {
@@ -51,7 +56,7 @@ else { Start-Piece 'server.py       (MCP tools)' $py 'server.py' "$logs\server.l
 if (Test-Port 8001) { Write-Host "  :8001 already up" -ForegroundColor DarkGray }
 else { Start-Piece 'dashboard_api.py (dashboard)' $py 'dashboard_api.py' "$logs\dashboard.log" }
 
-if (Test-Port 8790) { Write-Host "  :8790 already up" -ForegroundColor DarkGray }
+if (Test-Port $tfPort) { Write-Host "  :$tfPort already up" -ForegroundColor DarkGray }
 else {
     # The path contains spaces, so -File must arrive already quoted or pwsh
     # splits it and reports "'D:\micro' is not recognized".
@@ -67,7 +72,7 @@ Write-Host ""
 $checks = @(
     @{ name = 'MCP tools'; url = 'http://localhost:8000/mcp';      ok = { param($c) $c -in 400,405,406,200 } }
     @{ name = 'Dashboard'; url = 'http://localhost:8001/health';   ok = { param($c) $c -eq 200 } }
-    @{ name = 'TrueForge'; url = 'http://localhost:8790/';         ok = { param($c) $c -eq 200 } }
+    @{ name = 'TrueForge'; url = "http://localhost:$tfPort/";      ok = { param($c) $c -eq 200 } }
 )
 
 $deadline = (Get-Date).AddSeconds(75)
@@ -101,12 +106,12 @@ if ($state.Values -contains $false) {
 
 Write-Host ""
 Write-Host "  Dashboard   http://localhost:8001" -ForegroundColor Cyan
-Write-Host "  TrueForge   http://localhost:8790" -ForegroundColor Cyan
+Write-Host "  TrueForge   http://localhost:$tfPort" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  stop with .\stop.ps1" -ForegroundColor DarkGray
 Write-Host ""
 
 if (-not $NoBrowser) {
     Start-Process 'http://localhost:8001'
-    Start-Process 'http://localhost:8790'
+    Start-Process "http://localhost:$tfPort"
 }

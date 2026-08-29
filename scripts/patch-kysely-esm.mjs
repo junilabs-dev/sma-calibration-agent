@@ -53,11 +53,19 @@ if (!src.includes(NEEDLE)) {
 }
 
 src = src.replace(NEEDLE, PATCHED);
-if (!src.includes('pathToFileURL')) {
-  throw new Error('patch-kysely-esm: replacement did not take');
-}
+
+// The import has to land whenever the call does. Anchoring it to a leading
+// `/// <reference>` line -- which kysely currently has -- would silently no-op
+// if that line ever goes away, leaving a call to an undefined pathToFileURL
+// and a ReferenceError at migration time. Skip past any such lines if present,
+// otherwise insert at the top.
 if (!src.includes(IMPORT_LINE)) {
-  src = src.replace(/^(\/\/\/[^\n]*\n)/, `$1${IMPORT_LINE}`);
+  const leading = src.match(/^(?:\/\/\/[^\n]*\n)*/)?.[0].length ?? 0;
+  src = src.slice(0, leading) + IMPORT_LINE + src.slice(leading);
+}
+
+if (!src.includes(PATCHED) || !src.includes(IMPORT_LINE)) {
+  throw new Error('patch-kysely-esm: replacement did not take');
 }
 
 writeFileSync(target, src);

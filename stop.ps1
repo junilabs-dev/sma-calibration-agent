@@ -1,19 +1,21 @@
 <#
     Stop everything start.ps1 launched.
 
-    Matches on command line rather than killing every python/node on the box,
-    so unrelated work on this machine is left alone.
+    Matching on a bare name like "server.py" would reach any process on the
+    machine running a file with that name -- another checkout, an unrelated
+    project, a second TrueForge. Every process started here is launched either
+    from this directory's .venv or with this directory's script path on its
+    command line, so the checkout path is what identifies them.
 #>
 
 $root = $PSScriptRoot
-$patterns = @('server.py', 'dashboard_api.py', 'trueforge')
 $stopped = 0
 
 foreach ($procName in @('python.exe', 'node.exe', 'pwsh.exe')) {
     Get-CimInstance Win32_Process -Filter "Name='$procName'" -ErrorAction SilentlyContinue |
         Where-Object {
             $cl = $_.CommandLine
-            $cl -and ($patterns | Where-Object { $cl -like "*$_*" }) -and $cl -notlike '*stop.ps1*'
+            $cl -and $cl.Contains($root) -and $cl -notlike '*stop.ps1*'
         } |
         ForEach-Object {
             Write-Host ("  stopping {0} (pid {1})" -f $procName, $_.ProcessId) -ForegroundColor DarkGray
@@ -22,5 +24,5 @@ foreach ($procName in @('python.exe', 'node.exe', 'pwsh.exe')) {
         }
 }
 
-if ($stopped -eq 0) { Write-Host "nothing running" -ForegroundColor DarkGray }
+if ($stopped -eq 0) { Write-Host "nothing running from $root" -ForegroundColor DarkGray }
 else { Write-Host "stopped $stopped process(es)" -ForegroundColor Green }
