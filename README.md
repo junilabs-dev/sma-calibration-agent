@@ -68,12 +68,53 @@ the skill file) was built fresh for this hackathon.
 
 ## Quick start
 
-```bash
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python server.py
-# serving on http://localhost:8000/mcp
+Everything installs into this folder — a `.venv/` for Python and a local
+`node_modules/` for the harness. Nothing is installed globally and nothing is
+written outside this directory.
+
+```powershell
+# Python side
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# Harness side (local install, not `npm i -g`, not a bare `npx`)
+npm install
 ```
+
+Then one command:
+
+```powershell
+.\start.ps1
+```
+
+It starts all three servers, waits until each answers, prints `[ok]` or `[FAIL]`
+per service, and opens the two URLs you actually look at:
+
+| URL | What |
+|---|---|
+| http://localhost:8001 | the dashboard |
+| http://localhost:8790 | TrueForge chat |
+
+`:8000` is the MCP endpoint — machine-to-machine, nothing to open. Logs land in
+`.logs\`, and `.\stop.ps1` shuts everything down (matching on command line, so
+unrelated python/node on your machine is left alone).
+
+On macOS/Linux the equivalents are `source .venv/bin/activate` and, in place of
+the launcher script:
+
+```bash
+XDG_DATA_HOME="$PWD/.trueforge-local" \
+SQLITE_PATH="$PWD/.trueforge-local/db/db.sqlite" \
+PORT=8790 node node_modules/@truefoundry/trueforge/dist/cli.js
+```
+
+### Why a launcher script instead of `npx @truefoundry/trueforge`
+
+`npx` resolves the package through a shared cache, and TrueForge then keeps its
+SQLite database and sandbox working directories under the OS-wide app-data path
+(`%LOCALAPPDATA%\trueforge` on Windows). `run_trueforge.ps1` pins both into
+`.trueforge-local/` inside this folder, so the harness leaves no trace outside
+the project and `rm -rf .trueforge-local` is a complete reset.
 
 Sanity-check without any MCP client at all:
 
@@ -87,12 +128,43 @@ print('rmse_pct_of_peak:', r['rmse_pct_of_peak'])
 "
 ```
 
+## The dashboard
+
+`dashboard.html` is a single vanilla file (no build step, no npm, no chart
+library) that polls `:8001/progress` and renders the run as a materials-testing
+instrument: the live stress–strain fit, the 7 parameters as arc gauges, and the
+RMSE descent against the 3% pass bar.
+
+Open it directly, or serve it to avoid `file://` fetch restrictions:
+
+```powershell
+.\.venv\Scripts\python.exe -m http.server 8002
+# http://localhost:8002/dashboard.html
+```
+
+To see it populated without burning LLM tokens, `seed_demo.py` drives the *real*
+`evaluate_model` / `commit_calibration` functions with a coordinate descent
+standing in for the agent — the curves and RMSE it shows are genuine model
+output, not fixtures:
+
+```powershell
+.\.venv\Scripts\python.exe seed_demo.py --delay 0.8   # paced, so it animates live
+```
+
+Note that this bypasses the approval gate by calling the tool bodies directly;
+it demonstrates the dashboard, not the safety gate.
+
+**One thing the dashboard deliberately does not claim.** TrueForge holds
+`commit_calibration` *before* its Python body runs, so `progress_state.json` has
+no signal for "a human is being asked right now". The dashboard shows an
+amber state labelled `inferred` when a converged fit goes quiet, and says in the
+UI that the real approve/reject happens in TrueForge's own chat. It runs
+alongside that window, not instead of it.
+
 ## Wiring it into TrueForge
 
-```bash
-npx @truefoundry/trueforge
-```
-Then, in the harness config: connect a model (any provider — bring your own
+Start the harness with `.\run_trueforge.ps1` (see Quick start). Then, in the
+harness config: connect a model (any provider — bring your own
 key if running online), add this server as a remote MCP tool source at
 `http://localhost:8000/mcp`, and load `SKILL.md` as a skill for the agent.
 Give it one instruction: *"Calibrate the SMA model against the experimental
@@ -102,12 +174,23 @@ data and commit the result once you're confident in it."* Then watch it call
 
 ## Known gaps (cut for time, not forgotten)
 
-- **Sandbox code execution isn't exercised.** The search loop runs entirely
-  through the two MCP tools; the agent never writes/runs its own code in
-  TrueForge's sandbox. Cheapest fix if there's time left: after convergence,
-  ask the agent to write a short matplotlib script in the sandbox to plot
-  predicted vs. experimental stress-strain — it already has both arrays in
-  context by then, so it's a small ask.
+- **Sandbox code execution isn't exercised, and on Windows it can't be.**
+  The search loop runs entirely through the two MCP tools; the agent never
+  writes/runs its own code in TrueForge's sandbox. On this machine that isn't
+  just a time cut — TrueForge 0.1.4 logs
+  `LocalSandboxProvider supports macOS and Linux only (got win32)` at startup,
+  so the local sandbox is unavailable on Windows regardless. Demonstrating this
+  criterion needs macOS, Linux, or WSL.
+
+- **TrueForge needs a one-line patch to start on Windows at all.**
+  `scripts/patch-kysely-esm.mjs` (wired to `npm postinstall`, idempotent, and a
+  no-op off Windows) fixes it. The bug is upstream in kysely, not in TrueForge:
+  `FileMigrationProvider` calls `await import(filePath)` with an OS path, and
+  Node's ESM loader reads the leading `D:` as a URL scheme, so startup dies with
+  `ERR_UNSUPPORTED_ESM_URL_SCHEME ... Received protocol 'd:'` before the HTTP
+  listener opens. Verified against trueforge 0.1.4 *and* 0.2.0-rc.0, on both C:
+  and D: — it is Windows-wide, not specific to this checkout. Remove the script
+  once kysely ships the fix.
 - **Approval-gate wiring is annotation-based, unverified against a live
   TrueForge run.** `commit_calibration` is marked `destructiveHint: true`
   per the MCP spec — confirm TrueForge's approvals actually key off that
@@ -123,4 +206,9 @@ data and commit the result once you're confident in it."* Then watch it call
 | `sma_model.py` | the physics: constitutive model + synthetic data generator |
 | `server.py` | the MCP server: 3 tools wrapping the model |
 | `SKILL.md` | search-strategy guidance loaded into the agent |
+| `dashboard_api.py` | stdlib-only read-only feed of run progress on `:8001` |
+| `dashboard.html` | the live instrument dashboard (single file, no build) |
+| `seed_demo.py` | drives a real search locally so the dashboard has data |
+| `run_trueforge.ps1` | starts TrueForge with all state pinned inside this folder |
+| `scripts/patch-kysely-esm.mjs` | Windows ESM-loader fix, applied on `npm install` |
 | `requirements.txt` | fastmcp, numpy |
