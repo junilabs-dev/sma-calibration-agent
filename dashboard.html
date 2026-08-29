@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMA Calibration · live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0C0E;
+  --panel:#15181C;
+  --ink:#E8E5DE;
+  --teal:#6FA8A3;
+  --amber:#D9A15B;
+  --rust:#B5563C;
+  --rule:#232830;
+  --rule-soft:#1B1F24;
+  --muted:#79838D;
+  --dim:#4E565E;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:13px;
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.wheel{position:fixed;inset:0;z-index:0;pointer-events:none}
+#wheel-spin{transform-origin:0 0}
+
+.frame{
+  position:relative;z-index:1;
+  height:100vh;
+  display:grid;
+  grid-template-rows:40px 1fr 212px;
+  gap:9px;
+  padding:9px;
+}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 4px 0 2px;border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:baseline;gap:11px;min-width:0}
+.brand h1{font-size:13px;font-weight:600;letter-spacing:.17em}
+.brand .sub{font-size:10.5px;color:var(--muted);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topmeta{display:flex;align-items:center;gap:22px;flex:none}
+.meta{display:flex;align-items:baseline;gap:6px}
+.meta b{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.02em}
+.meta span{font-size:9.5px;color:var(--dim);letter-spacing:.14em}
+.link{display:flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:.14em;color:var(--muted)}
+.link i{width:6px;height:6px;border-radius:50%;background:var(--dim);display:block}
+.link.on i{background:var(--teal);box-shadow:0 0 0 3px rgba(111,168,163,.13)}
+.link.on{color:var(--teal)}
+.link.off i{background:var(--rust)}
+.link.off{color:var(--rust)}
+
+.stage{display:grid;grid-template-columns:1fr 316px;gap:9px;min-height:0}
+.rack{display:grid;grid-template-columns:1fr 316px;gap:9px;min-height:0}
+.panel{
+  position:relative;
+  background:var(--panel);
+  border:1px solid var(--rule);
+  display:flex;flex-direction:column;min-width:0;min-height:0;
+}
+.panel::before,.panel::after{
+  content:'';position:absolute;width:7px;height:7px;pointer-events:none;
+  border-color:var(--dim);opacity:.55;
+}
+.panel::before{top:-1px;left:-1px;border-top:1px solid;border-left:1px solid}
+.panel::after{bottom:-1px;right:-1px;border-bottom:1px solid;border-right:1px solid}
+.phead{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:8px 11px 7px;border-bottom:1px solid var(--rule-soft);flex:none;
+}
+.phead h2{font-size:9.5px;font-weight:600;letter-spacing:.19em;color:var(--muted)}
+.phead .note{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:.06em}
+.pbody{flex:1;min-height:0;position:relative}
+.pbody svg{display:block;width:100%;height:100%}
+
+.legend{display:flex;gap:14px;font-size:9.5px;letter-spacing:.09em;color:var(--dim)}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:13px;height:0;display:block;border-top:1.5px solid}
+.legend i.dots{border-top:1.5px dotted var(--muted)}
+.legend i.pred{border-top-color:var(--teal)}
+.legend i.ghost{border-top:1.5px solid rgba(111,168,163,.28)}
+
+.wheelcol{display:flex;flex-direction:column;justify-content:center;padding:0 4px 0 16px;min-width:0}
+.hlabel{font-size:9.5px;letter-spacing:.19em;color:var(--muted);display:block}
+.hval{
+  font-family:var(--mono);font-weight:500;
+  font-size:clamp(46px,7.4vh,72px);line-height:.94;letter-spacing:-.028em;
+  display:block;margin-top:9px;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.hval.stale{color:var(--dim)}
+.hval small{font-size:.34em;letter-spacing:.02em;margin-left:.14em;color:var(--muted)}
+.hdelta{font-family:var(--mono);font-size:11.5px;display:block;margin-top:9px;color:var(--dim);letter-spacing:.02em}
+.hdelta.down{color:var(--teal)}
+.hdelta.up{color:var(--amber)}
+.hrule{height:1px;background:var(--rule);margin:15px 0 12px;max-width:210px}
+.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;max-width:230px}
+.hcell span{font-size:9px;letter-spacing:.14em;color:var(--dim);display:block}
+.hcell b{font-family:var(--mono);font-size:12.5px;font-weight:500;display:block;margin-top:3px}
+
+.gaugerow{flex:1;display:grid;grid-template-columns:repeat(7,1fr);min-height:0;align-items:stretch}
+.gauge{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;padding:5px 2px 7px;min-width:0;border-right:1px solid var(--rule-soft);
+}
+.gauge:last-child{border-right:0}
+.gauge .gname{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em}
+.gauge .gdesc{font-size:8.5px;letter-spacing:.09em;color:var(--dim);text-align:center;line-height:1.25}
+.gauge svg{width:100%;max-width:96px;height:auto;flex:none}
+.gauge .gval{font-family:var(--mono);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
+.gauge .gunit{font-size:8.5px;color:var(--dim);letter-spacing:.1em}
+.gauge.oor .gval{color:var(--amber)}
+
+.trend .pbody{flex:none;height:74px;padding:2px 4px 0}
+.banner{
+  flex:none;display:flex;align-items:center;gap:9px;
+  padding:8px 11px;border-top:1px solid var(--rule-soft);
+  border-left:2px solid var(--dim);margin-top:auto;
+}
+.banner i{width:7px;height:7px;flex:none;border-radius:50%;background:var(--dim)}
+.banner .btext{font-size:10.5px;letter-spacing:.13em;font-weight:500;color:var(--muted)}
+.banner .bsub{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.banner.searching{border-left-color:var(--teal)}
+.banner.searching i{background:var(--teal)}
+.banner.searching .btext{color:var(--teal)}
+.banner.inferred{border-left-color:var(--amber)}
+.banner.inferred i{background:var(--amber);animation:pulse 1.9s ease-in-out infinite}
+.banner.inferred .btext{color:var(--amber)}
+.banner.rejected{border-left-color:var(--rust)}
+.banner.rejected i{background:var(--rust)}
+.banner.rejected .btext{color:var(--rust)}
+.banner.committed{border-left-color:var(--teal)}
+.banner.committed i{background:var(--teal);box-shadow:0 0 0 3px rgba(111,168,163,.14)}
+.banner.committed .btext{color:var(--ink)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.32}}
+.caption{
+  flex:none;padding:7px 11px 8px;font-size:9.5px;line-height:1.45;color:var(--dim);
+  border-top:1px solid var(--rule-soft);
+}
+.caption b{color:var(--muted);font-weight:500}
+</style>
+</head>
+<body>
+
+<svg class="wheel" id="wheel" aria-hidden="true"></svg>
+
+<div class="frame">
+  <header class="topbar">
+    <div class="brand">
+      <h1>SMA CALIBRATION</h1>
+      <span class="sub">superelastic NiTi · 7-parameter inverse identification · single load–unload cycle</span>
+    </div>
+    <div class="topmeta">
+      <div class="meta"><b id="m-iter">—</b><span>EVAL</span></div>
+      <div class="meta"><b id="m-elapsed">—:—</b><span>ELAPSED</span></div>
+      <div class="link" id="link"><i></i><span id="link-text">CONNECTING</span></div>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="panel">
+      <div class="phead">
+        <h2>STRESS–STRAIN RESPONSE</h2>
+        <div class="legend">
+          <span><i class="dots"></i>measured</span>
+          <span><i class="ghost"></i>prior</span>
+          <span><i class="pred"></i>model</span>
+        </div>
+      </div>
+      <div class="pbody"><svg id="chart"></svg></div>
+    </section>
+
+    <aside class="wheelcol">
+      <span class="hlabel">RMSE · % OF PEAK</span>
+      <span class="hval stale" id="h-rmse">——<small>%</small></span>
+      <span class="hdelta" id="h-delta">awaiting first evaluation</span>
+      <div class="hrule"></div>
+      <div class="hgrid">
+        <div class="hcell"><span>RMSE ABS</span><b id="h-abs">—</b></div>
+        <div class="hcell"><span>PASS BAR</span><b id="h-bar">3.00 %</b></div>
+        <div class="hcell"><span>PEAK σ</span><b id="h-peak">—</b></div>
+        <div class="hcell"><span>POINTS</span><b id="h-pts">—</b></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="rack">
+    <section class="panel">
+      <div class="phead">
+        <h2>PARAMETER VECTOR</h2>
+        <span class="note">arc = position within typical NiTi range</span>
+      </div>
+      <div class="gaugerow" id="gauges"></div>
+    </section>
+
+    <section class="panel trend">
+      <div class="phead">
+        <h2>CONVERGENCE</h2>
+        <span class="note">log · % of peak</span>
+      </div>
+      <div class="pbody"><svg id="spark"></svg></div>
+      <div class="banner" id="banner">
+        <i></i>
+        <span class="btext" id="banner-text">NO SIGNAL</span>
+        <span class="bsub" id="banner-sub"></span>
+      </div>
+      <p class="caption">
+        <b>Approval state is not observable from here.</b> TrueForge holds
+        <span class="mono">commit_calibration</span> before its Python body runs, so this window
+        sees a commit only once a human has signed off — in TrueForge's own chat.
+      </p>
+    </section>
+  </footer>
+</div>
+
+<script>
+// Served by dashboard_api.py, so same-origin. Falls back to an absolute URL for
+// the case where the file is opened straight off disk.
+const API = location.protocol === 'file:' ? 'http://localhost:8001/progress' : '/progress';
+const POLL_MS = 1200;
+const PASS_PCT = 3.0;
+const PENDING_AFTER_MS = 8000;
+
+const PARAMS = [
+  ['E_A',      'austenite E',   'MPa', 30000, 70000, 0],
+  ['E_M',      'martensite E',  'MPa', 15000, 35000, 0],
+  ['eps_L',    'transf strain', '',    0.03,  0.06,  4],
+  ['sig_AS_s', 'fwd start',     'MPa', 300,   500,   1],
+  ['sig_AS_f', 'fwd finish',    'MPa', 340,   600,   1],
+  ['sig_SA_s', 'rev start',     'MPa', 150,   320,   1],
+  ['sig_SA_f', 'rev finish',    'MPa', 80,    220,   1],
+];
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+const view = {
+  experimental: null,
+  evals: [],
+  committed: null,
+  reject: null,
+  rejectIsLatest: false,
+  linked: false,
+  eventCount: -1,
+  firstAt: null,
+  lastAt: null,
+};
+
+// History is append-only, so "did anything happen" is just its length. The change
+// is stamped from the local clock rather than at_utc: the inferred-pending timer
+// below must not drift with skew between the agent host and this page.
+let lastChangeAt = performance.now();
+
+async function poll() {
+  try {
+    const r = await fetch(API, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    apply(await r.json());
+    view.linked = true;
+  } catch {
+    view.linked = false;
+  }
+  render();
+}
+
+function apply(data) {
+  view.experimental = data.experimental || null;
+
+  const hist = data.history || [];
+  if (hist.length !== view.eventCount) {
+    view.eventCount = hist.length;
+    lastChangeAt = performance.now();
+  }
+
+  const evals = [];
+  let committed = null, reject = null, rejectIsLatest = false;
+  for (const ev of hist) {
+    if (ev.type === 'evaluate') { evals.push(ev); rejectIsLatest = false; }
+    else if (ev.type === 'commit_success') { committed = ev; rejectIsLatest = false; }
+    else if (ev.type === 'commit_attempt' && !ev.committed) { reject = ev; rejectIsLatest = true; }
+  }
+  view.evals = evals;
+  view.committed = committed;
+  view.reject = reject;
+  view.rejectIsLatest = rejectIsLatest;
+
+  const stamps = hist.map(e => Date.parse(e.at_utc || e.committed_at_utc)).filter(n => !isNaN(n));
+  view.firstAt = stamps.length ? Math.min(...stamps) : null;
+  view.lastAt = stamps.length ? Math.max(...stamps) : null;
+}
+
+const latestEval = () => view.evals.length ? view.evals[view.evals.length - 1] : null;
+const currentRmse = () => { const e = latestEval(); return e ? e.rmse_pct_of_peak : null; };
+
+function status() {
+  if (!view.linked) return 'offline';
+  if (view.committed) return 'committed';
+  if (view.rejectIsLatest) return 'rejected';
+  const e = latestEval();
+  if (!e) return 'idle';
+  // Soft inference only: a converged fit that has gone quiet is *probably* parked at
+  // TrueForge's approval prompt, but nothing here can confirm that. Labelled as
+  // inferred everywhere it surfaces.
+  if (e.rmse_pct_of_peak <= PASS_PCT && performance.now() - lastChangeAt > PENDING_AFTER_MS) return 'inferred';
+  return 'searching';
+}
+
+const wheelSvg = $('wheel');
+let spin = null;
+
+function buildWheel() {
+  const W = innerWidth, H = innerHeight;
+  // R is capped rather than simply "big": past ~H*0.36 the only part of the ring
+  // left of the viewport edge is a near-vertical sliver, which reads as a stray
+  // arc instead of a dial. This keeps visible curvature inside the right column
+  // while the ring still runs off the edge.
+  const R = Math.max(Math.min(H * 0.36, 360), 260);
+  const cx = W - 80, cy = H * 0.40;
+
+  let ticks = '';
+  for (let a = 0; a < 360; a += 6) {
+    const long = a % 30 === 0;
+    const r0 = long ? R - 22 : R - 9;
+    const rad = (a - 90) * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+    ticks += '<line x1="' + (r0 * c).toFixed(2) + '" y1="' + (r0 * s).toFixed(2) +
+             '" x2="' + (R * c).toFixed(2) + '" y2="' + (R * s).toFixed(2) +
+             '" stroke="#E8E5DE" stroke-width="' + (long ? 1.5 : 1) +
+             '" opacity="' + (long ? .95 : .5) + '"/>';
+  }
+
+  wheelSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  wheelSvg.innerHTML =
+    '<g transform="translate(' + cx.toFixed(1) + ',' + cy.toFixed(1) + ')" opacity="0.22">' +
+      '<g id="wheel-spin">' +
+        '<circle r="' + R.toFixed(1) + '" fill="none" stroke="#E8E5DE" stroke-width="1"/>' +
+        '<circle r="' + (R - 22).toFixed(1) + '" fill="none" stroke="#E8E5DE" stroke-width="0.6" opacity="0.45"/>' +
+        ticks +
+      '</g>' +
+      '<circle r="' + (R * 0.62).toFixed(1) + '" fill="none" stroke="#E8E5DE" stroke-width="0.6" opacity="0.3"/>' +
+    '</g>';
+  spin = $('wheel-spin');
+}
+
+// Driven by rAF rather than a CSS animation: animation-duration can only be retimed
+// by restarting the animation, which visibly jumps. Accumulating the angle lets the
+// ring ease from restless to settled as RMSE falls.
+function wheelDegPerSec() {
+  if (view.committed) return 0.35;
+  const r = currentRmse();
+  if (r == null) return 1.6;
+  const t = clamp((r - PASS_PCT) / (40 - PASS_PCT), 0, 1);
+  return 0.8 + t * t * 11;
+}
+
+let angle = 0, prevFrame = performance.now();
+function spinFrame(now) {
+  const dt = Math.min((now - prevFrame) / 1000, 0.1);
+  prevFrame = now;
+  angle = (angle + wheelDegPerSec() * dt) % 360;
+  if (spin) spin.style.transform = 'rotate(' + angle.toFixed(3) + 'deg)';
+  requestAnimationFrame(spinFrame);
+}
+
+const chartSvg = $('chart');
+const PAD = { l: 54, r: 16, t: 14, b: 30 };
+
+function niceCeil(v) {
+  const step = Math.pow(10, Math.floor(Math.log10(v))) / 2;
+  return Math.ceil(v / step) * step;
+}
+
+function drawChart() {
+  const box = chartSvg.parentElement.getBoundingClientRect();
+  const W = Math.max(box.width, 10), H = Math.max(box.height, 10);
+  chartSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  const exp = view.experimental;
+  if (!exp || !exp.strain || !exp.strain.length) {
+    chartSvg.innerHTML = '<text x="' + (W / 2) + '" y="' + (H / 2) +
+      '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="middle" letter-spacing="1.6">AWAITING EXPERIMENTAL TRACE</text>';
+    return;
+  }
+
+  const xMax = niceCeil(Math.max.apply(null, exp.strain));
+  const yMax = niceCeil(Math.max.apply(null, exp.stress_mpa) * 1.06);
+  const px = v => PAD.l + (v / xMax) * (W - PAD.l - PAD.r);
+  const py = v => H - PAD.b - (v / yMax) * (H - PAD.t - PAD.b);
+
+  let g = '';
+  for (let i = 0; i <= 5; i++) {
+    const yv = (yMax / 5) * i, y = py(yv);
+    g += '<line x1="' + PAD.l + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.r).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#232830" stroke-width="1"/>' +
+         '<text x="' + (PAD.l - 9) + '" y="' + (y + 3.5).toFixed(1) + '" fill="#79838D" font-family="IBM Plex Mono,monospace" font-size="9.5" text-anchor="end">' + yv.toFixed(0) + '</text>';
+    const xv = (xMax / 5) * i, x = px(xv);
+    g += '<line x1="' + x.toFixed(1) + '" y1="' + PAD.t + '" x2="' + x.toFixed(1) + '" y2="' + (H - PAD.b).toFixed(1) + '" stroke="#1B1F24" stroke-width="1"/>' +
+         '<text x="' + x.toFixed(1) + '" y="' + (H - PAD.b + 15).toFixed(1) + '" fill="#79838D" font-family="IBM Plex Mono,monospace" font-size="9.5" text-anchor="middle">' + xv.toFixed(3) + '</text>';
+  }
+  g += '<text x="' + (PAD.l - 9) + '" y="' + (PAD.t + 1) + '" fill="#4E565E" font-family="IBM Plex Sans,sans-serif" font-size="9" text-anchor="end" letter-spacing="1.5">MPa</text>' +
+       '<text x="' + (W - PAD.r).toFixed(1) + '" y="' + (H - 6).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Sans,sans-serif" font-size="9" text-anchor="end" letter-spacing="1.5">STRAIN ε</text>';
+
+  let dots = '';
+  for (let i = 0; i < exp.strain.length; i++) {
+    dots += '<circle cx="' + px(exp.strain[i]).toFixed(1) + '" cy="' + py(exp.stress_mpa[i]).toFixed(1) + '" r="1.7" fill="#E8E5DE" opacity="0.42"/>';
+  }
+
+  const curve = ev => {
+    const s = ev.predicted_stress_mpa;
+    if (!s) return '';
+    let d = '';
+    for (let i = 0; i < s.length && i < exp.strain.length; i++) {
+      d += (i ? 'L' : 'M') + px(exp.strain[i]).toFixed(1) + ' ' + py(s[i]).toFixed(1);
+    }
+    return d;
+  };
+
+  let ghosts = '';
+  const n = view.evals.length;
+  const ghostFrom = Math.max(0, n - 4);
+  for (let k = ghostFrom; k < n - 1; k++) {
+    const d = curve(view.evals[k]);
+    if (d) ghosts += '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="1" opacity="' + (0.08 + 0.06 * (k - ghostFrom)).toFixed(2) + '"/>';
+  }
+
+  let live = '';
+  const last = latestEval();
+  if (last) {
+    const d = curve(last);
+    if (d) {
+      const done = !!view.committed;
+      live = '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="' + (done ? 2 : 1.7) + '" stroke-linejoin="round" opacity="' + (done ? 1 : .92) + '"/>';
+    }
+  }
+
+  let stamp = '';
+  if (view.committed) {
+    stamp = '<g transform="translate(' + (PAD.l + 14).toFixed(1) + ',' + (PAD.t + 20).toFixed(1) + ')">' +
+      '<rect x="0" y="-11" width="132" height="17" fill="none" stroke="#6FA8A3" stroke-width="1" opacity="0.55"/>' +
+      '<text x="9" y="1.5" fill="#6FA8A3" font-family="IBM Plex Mono,monospace" font-size="9.5" letter-spacing="2">CARD COMMITTED</text></g>';
+  }
+
+  chartSvg.innerHTML = g + dots + ghosts + live + stamp;
+}
+
+const polar = (r, deg) => { const a = (deg - 90) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; };
+
+function arc(r, a0, a1) {
+  const p0 = polar(r, a0), p1 = polar(r, a1);
+  return 'M' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+         'A' + r + ' ' + r + ' 0 ' + (a1 - a0 > 180 ? 1 : 0) + ' 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
+}
+
+const SWEEP = 270, A0 = -135, GR = 26;
+
+function buildGauges() {
+  $('gauges').innerHTML = PARAMS.map(p =>
+    '<div class="gauge" id="g-' + p[0] + '">' +
+      '<span class="gname">' + p[0] + '</span>' +
+      '<span class="gdesc">' + p[1] + '</span>' +
+      '<svg viewBox="-34 -34 68 60">' +
+        '<path d="' + arc(GR, A0, A0 + SWEEP) + '" fill="none" stroke="#232830" stroke-width="3.5"/>' +
+        '<path class="gfill" d="" fill="none" stroke="#6FA8A3" stroke-width="3.5"/>' +
+        '<line class="gneedle" x1="0" y1="0" x2="0" y2="0" stroke="#E8E5DE" stroke-width="1.2" opacity="0"/>' +
+        '<circle r="1.6" fill="#4E565E"/>' +
+      '</svg>' +
+      '<span class="gval">—</span>' +
+      '<span class="gunit">' + (p[2] || '—') + '</span>' +
+    '</div>').join('');
+}
+
+function drawGauges() {
+  const e = latestEval();
+  const p = view.committed ? view.committed.params : (e ? e.params : null);
+
+  for (const [key, , , lo, hi, dp] of PARAMS) {
+    const el = $('g-' + key);
+    const fill = el.querySelector('.gfill');
+    const needle = el.querySelector('.gneedle');
+    const val = el.querySelector('.gval');
+
+    if (!p || p[key] == null) {
+      fill.setAttribute('d', '');
+      needle.setAttribute('opacity', '0');
+      val.textContent = '—';
+      el.classList.remove('oor');
+      continue;
+    }
+
+    const v = p[key];
+    const raw = (v - lo) / (hi - lo);
+    const a = A0 + SWEEP * clamp(raw, 0, 1);
+    const oor = raw < -0.001 || raw > 1.001;
+
+    fill.setAttribute('d', arc(GR, A0, Math.max(a, A0 + 0.01)));
+    fill.setAttribute('stroke', oor ? '#D9A15B' : '#6FA8A3');
+    const tip = polar(GR - 5.5, a), base = polar(8, a);
+    needle.setAttribute('x1', base[0].toFixed(2)); needle.setAttribute('y1', base[1].toFixed(2));
+    needle.setAttribute('x2', tip[0].toFixed(2));  needle.setAttribute('y2', tip[1].toFixed(2));
+    needle.setAttribute('opacity', '0.85');
+    val.textContent = v.toFixed(dp);
+    el.classList.toggle('oor', oor);
+  }
+}
+
+const sparkSvg = $('spark');
+
+function drawSpark() {
+  const box = sparkSvg.parentElement.getBoundingClientRect();
+  const W = Math.max(box.width, 10), H = Math.max(box.height, 10);
+  sparkSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  const L = 30, R = 8, T = 8, B = 15;
+  // Log y: a run routinely spans 60% -> 1%, which a linear axis flattens into one
+  // vertical drop followed by a dead flat line. The range tracks the data (rather
+  // than a fixed 0.2-100) so a late run that only moves 5% -> 1.8% still shows its
+  // descent instead of collapsing onto the top gridline. Always keeps the pass bar
+  // in frame so the number has something to be judged against.
+  const vals = view.evals.map(e => e.rmse_pct_of_peak).filter(v => v > 0);
+  const lo = Math.max(0.05, Math.min(PASS_PCT * 0.55, vals.length ? Math.min.apply(null, vals) * 0.75 : 1));
+  const hi = Math.max(PASS_PCT * 1.4, vals.length ? Math.max.apply(null, vals) * 1.3 : 10);
+  const lgLo = Math.log10(lo), lgHi = Math.log10(hi);
+  const yOf = v => H - B - ((Math.log10(clamp(v, lo, hi)) - lgLo) / (lgHi - lgLo)) * (H - T - B);
+
+  let g = '';
+  const decades = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].filter(d => d >= lo && d <= hi);
+  for (const dec of decades.slice(0, 5)) {
+    const y = yOf(dec);
+    g += '<line x1="' + L + '" y1="' + y.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#1B1F24" stroke-width="1"/>' +
+         '<text x="' + (L - 6) + '" y="' + (y + 3).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="8.5" text-anchor="end">' + (dec < 1 ? dec : dec.toFixed(0)) + '</text>';
+  }
+  const ty = yOf(PASS_PCT);
+  g += '<line x1="' + L + '" y1="' + ty.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#D9A15B" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"/>' +
+       '<text x="' + (W - R).toFixed(1) + '" y="' + (ty - 4).toFixed(1) + '" fill="#D9A15B" font-family="IBM Plex Mono,monospace" font-size="8.5" text-anchor="end" opacity="0.8">PASS 3%</text>';
+
+  const n = view.evals.length;
+  if (n) {
+    const xOf = i => n === 1 ? (L + W - R) / 2 : L + (i / (n - 1)) * (W - R - L);
+    let d = '', pts = '';
+    view.evals.forEach((ev, i) => {
+      const x = xOf(i), y = yOf(ev.rmse_pct_of_peak);
+      d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+      if (n <= 40) pts += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="1.4" fill="#6FA8A3" opacity="0.55"/>';
+    });
+    g += '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="1.4" stroke-linejoin="round"/>' + pts +
+         '<circle cx="' + xOf(n - 1).toFixed(1) + '" cy="' + yOf(view.evals[n - 1].rmse_pct_of_peak).toFixed(1) + '" r="2.8" fill="#6FA8A3"/>';
+  } else {
+    g += '<text x="' + (W / 2) + '" y="' + (H / 2 + 3) + '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="9.5" text-anchor="middle" letter-spacing="1.4">NO EVALUATIONS YET</text>';
+  }
+  sparkSvg.innerHTML = g;
+}
+
+const BANNERS = {
+  offline:   ['NO SIGNAL',              '',          'start dashboard_api.py'],
+  idle:      ['LINKED · IDLE',          '',          'waiting for first evaluate_model'],
+  searching: ['SEARCHING',              'searching', ''],
+  inferred:  ['LIKELY AWAITING SIGN-OFF','inferred', 'inferred'],
+  rejected:  ['COMMIT REJECTED',        'rejected',  ''],
+  committed: ['CALIBRATION COMMITTED',  'committed', ''],
+};
+
+function fmtElapsed(ms) {
+  if (ms == null || ms < 0) return '—:—';
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+function render() {
+  const st = status();
+
+  const link = $('link');
+  link.className = 'link ' + (view.linked ? 'on' : 'off');
+  $('link-text').textContent = view.linked ? 'LINKED :8001' : 'NO SIGNAL :8001';
+
+  $('m-iter').textContent = view.evals.length ? String(view.evals.length).padStart(2, '0') : '—';
+  $('m-elapsed').textContent = view.firstAt ? fmtElapsed(view.lastAt - view.firstAt) : '—:—';
+
+  const rm = $('h-rmse'), r = currentRmse();
+  if (r == null) {
+    rm.innerHTML = '——<small>%</small>';
+    rm.className = 'hval stale';
+    rm.style.color = '';
+  } else {
+    rm.innerHTML = r.toFixed(2) + '<small>%</small>';
+    rm.className = 'hval';
+    rm.style.color = r <= PASS_PCT ? '#6FA8A3' : '#E8E5DE';
+  }
+
+  const dEl = $('h-delta');
+  if (view.evals.length >= 2) {
+    const d = r - view.evals[view.evals.length - 2].rmse_pct_of_peak;
+    dEl.textContent = (d <= 0 ? '▼ ' : '▲ ') + Math.abs(d).toFixed(2) + ' pt vs. prev';
+    dEl.className = 'hdelta ' + (d <= 0 ? 'down' : 'up');
+  } else {
+    dEl.textContent = view.evals.length ? 'first evaluation' : 'awaiting first evaluation';
+    dEl.className = 'hdelta';
+  }
+
+  const exp = view.experimental;
+  const peak = exp && exp.stress_mpa ? Math.max.apply(null, exp.stress_mpa) : null;
+  const src = view.committed || latestEval();
+  // Only commit events carry rmse_mpa; for an evaluate it is recovered from the
+  // percentage, which is how the server derived that percentage in the first place.
+  const abs = src && src.rmse_mpa != null ? src.rmse_mpa
+            : (r != null && peak != null ? r / 100 * peak : null);
+  $('h-abs').textContent = abs != null ? abs.toFixed(2) + ' MPa' : '—';
+  $('h-peak').textContent = peak != null ? peak.toFixed(0) + ' MPa' : '—';
+  $('h-pts').textContent = exp && exp.strain ? exp.strain.length : '—';
+
+  const spec = BANNERS[st];
+  $('banner').className = 'banner ' + spec[1];
+  $('banner-text').textContent = spec[0];
+
+  let sub = spec[2];
+  if (st === 'rejected' && view.reject) sub = (view.reject.reason || '').slice(0, 44);
+  else if (st === 'committed' && view.committed) sub = view.committed.rmse_pct_of_peak.toFixed(2) + '% · signed off';
+  else if (st === 'searching') sub = view.evals.length + ' evals · coordinate descent';
+  $('banner-sub').textContent = sub;
+
+  drawChart();
+  drawGauges();
+  drawSpark();
+}
+
+let resizeTimer;
+addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { buildWheel(); render(); }, 120);
+});
+
+buildWheel();
+buildGauges();
+render();
+requestAnimationFrame(spinFrame);
+poll();
+setInterval(poll, POLL_MS);
+</script>
+</body>
+</html>
