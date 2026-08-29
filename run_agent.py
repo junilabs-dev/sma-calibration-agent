@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -74,9 +75,18 @@ several parameters at once when several regimes are off. If a call returns
 valid=false, read the reason -- it names the parameter to fix.
 
 Only once rmse_pct_of_peak is comfortably under the pass threshold, call
-commit_calibration with a justification stating the final RMSE and anything
-still visibly off. That call is irreversible and a human has to approve it, so
-the justification is what they will judge it on.
+commit_calibration. It takes eight arguments: the seven parameters AND a
+`justification` string. `justification` is required, not optional -- a call
+without it is rejected by argument validation before the tool runs, and you
+will have wasted the approval. Write it as prose that states the final RMSE and
+names anything still visibly off, for example:
+
+  justification="Converged to 1.85% of peak, comfortably inside the 3% bar.
+  Plateau stresses match to ~1%; E_M is the least constrained parameter here
+  and may be several percent high."
+
+That call is irreversible and a human has to approve it, so the justification
+is what they will judge it on.
 """
 
 TASK = ("Calibrate the SMA model against the experimental data, then commit the "
@@ -232,6 +242,21 @@ def wait_for_dashboard(ev: dict, timeout_s: int = 600) -> dict:
         PENDING_PATH.unlink(missing_ok=True)
 
 
+MAX_RATE_LIMIT_RETRIES = 6
+
+
+def rate_limit_wait(message: str) -> int | None:
+    """Seconds to wait if this failure is a rate limit, else None.
+
+    Providers report the window in the message ("Please retry in 27.5s"), so
+    honour it when it is there and fall back to a minute otherwise -- free-tier
+    quotas are per-minute, not per-day, and waiting is what clears them."""
+    if "429" not in message and "quota" not in message.lower() and "rate limit" not in message.lower():
+        return None
+    m = re.search(r"retry in ([\d.]+)s", message)
+    return min(int(float(m.group(1))) + 3, 90) if m else 65
+
+
 def decide(ev: dict, args) -> dict:
     calls = ev.get("tool_calls", [])
     print("\n" + "=" * 66)
@@ -247,7 +272,11 @@ def decide(ev: dict, args) -> dict:
     if args.deny:
         print("  --deny: refusing\n")
         return {"status": "deny", "reason": "Denied by run_agent.py --deny"}
-    if not sys.stdin.isatty():
+    # The caller says how the decision arrives; the child does not guess. A
+    # process launched by the dashboard can still inherit a console handle, so
+    # isatty() reports a terminal that nobody is watching and the run hangs on a
+    # prompt with no reader -- which is exactly what it did before this flag.
+    if args.await_dashboard or not sys.stdin.isatty():
         return wait_for_dashboard(ev)
 
     while True:
@@ -263,6 +292,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--auto-approve", action="store_true", help="approve without prompting")
     ap.add_argument("--deny", action="store_true", help="always deny, to prove the gate blocks")
+    ap.add_argument("--await-dashboard", action="store_true",
+                    help="take the approval decision from the dashboard rather than a prompt")
     ap.add_argument("--with-skill", action="store_true",
                     help="attach SKILL.md; needs a sandbox provider and a pushed repo")
     ap.add_argument("--task", default=TASK)
@@ -283,6 +314,7 @@ def main() -> int:
     items: list[dict] = [{"type": "user.message", "content": args.task}]
     previous_turn_id = None
     approvals = 0
+    rate_limit_retries = 0
 
     # Each approval resumes the run as a new turn chained to the last one, so the
     # loop continues until a turn completes without asking for anything.
@@ -297,10 +329,24 @@ def main() -> int:
             failure = describe(ev) or failure
 
         if failure:
+            # Free-tier quotas are per-minute and the harness does not retry, so a
+            # long search reliably dies partway through on a 429 -- mid-demo, with
+            # the fit converged and the commit never attempted. The window is
+            # short, so waiting it out is almost always the right move.
+            wait = rate_limit_wait(failure)
+            if wait is not None and rate_limit_retries < MAX_RATE_LIMIT_RETRIES:
+                rate_limit_retries += 1
+                print(f"\nrate limited; waiting {wait}s and resuming "
+                      f"({rate_limit_retries}/{MAX_RATE_LIMIT_RETRIES})", flush=True)
+                time.sleep(wait)
+                continue  # same items, same previous_turn_id -- resume where it stopped
             print(f"\nturn failed: {failure}")
             if "API key" in failure:
                 print("Register a working key:  python configure_trueforge.py --model-key <key>")
                 print("Free Gemini key: https://aistudio.google.com")
+            elif wait is not None:
+                print(f"Still rate limited after {MAX_RATE_LIMIT_RETRIES} waits. "
+                      f"Free tiers allow ~15 requests/minute; try again shortly.")
             return 1
 
         if not pending:

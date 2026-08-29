@@ -1,26 +1,79 @@
-# SMA Calibration Agent — built on TrueForge
+# NEUTRINO — Inverse Solver Workstation
+
+**SMA calibration agent, built on TrueForge.**
 
 An agent that inverse-identifies the 7 parameters of a superelastic
 shape-memory-alloy (SMA / NiTi) constitutive model from a noisy tensile-test
 trace — the thing a materials engineer normally does by hand over hours of
 trial and error — and asks a human to sign off before it trusts the result.
 
+![NEUTRINO workstation](docs/neutrino.png)
+
+### What this is, and what it is not
+
+This is a **working prototype**, not a product. The agent is real: it drives
+TrueForge's API, calls a custom MCP server, and stops at a human approval gate
+before writing anything irreversible. What it is not is finished — the material
+model is a fast closed-form surrogate rather than an Abaqus solve, the dataset
+is one synthetic specimen, and the workstation implements the calibration
+workflow only.
+
+NEUTRINO is the first module of **MODULON**, a suite I am building out to cover
+the rest of the computational-mechanics pipeline — data ingestion, model setup,
+solver orchestration, validation and reporting — as one environment rather than
+the spreadsheets and one-off scripts that chain those steps together today.
+Seventeen modules are scoped; this one is built. Nothing in this repository
+depends on the others existing, and none of the rest is claimed as working
+software here.
+
+## What the agent does, and how it uses TrueForge
+
+**The task.** A tensile test gives you a stress–strain curve. Recovering the
+constitutive parameters that produced it is an inverse problem: you cannot solve
+for them directly, you can only guess, simulate, compare, and adjust. Doing that
+by hand for seven coupled parameters is an afternoon's work and the result
+depends on who did it. The agent does the search; a human still signs the
+result.
+
+**What TrueForge actually runs.** Not a wrapper around a chat completion — the
+harness owns every part of the loop:
+
+| TrueForge feature | How this project uses it |
+|---|---|
+| **Agent + session + turn API** | `run_agent.py` registers the agent, opens a session and streams turns over `/api/v1` — the agent loop is TrueForge's, not a hand-rolled while-loop |
+| **Remote MCP tool source** | `server.py` is registered as a remote MCP server; the harness performs discovery and dispatch, and reports the three tools back through `/mcp-servers/{name}/tools` |
+| **Approval gate** | `commit_calibration` is annotated `destructiveHint`; the agent's MCP entry sets `require_approval_for_tools: ["@destructive"]`; the harness emits `tool.approval_required` and **stops the tool before its body runs** |
+| **Approval resume** | the decision goes back as a `user.tool_approval` item on a follow-up turn — allow or deny, with the denial reason surfaced to the agent |
+| **Model providers** | registered through `/settings/model-providers`; the model is swappable without touching project code |
+| **Programmatic configuration** | `configure_trueforge.py` registers the MCP server, model, skill and sandbox through the API, so setup is reproducible and reviewable in git rather than clicked together |
+| **Session state** | every run is retained by the harness; the dashboard reads the agent, session count and tool registration back from it |
+
+**Where you can see it.** The dashboard's `TRUEFORGE HARNESS` panel reports the
+harness's own state — agent name, sessions, registered tools, sandbox
+availability — read live from `/api/v1`, so it goes blank if the harness stops.
+The dashboard watches; it does not host the loop.
+
+**What is not exercised, and why.** Sandbox and skills are unavailable on
+Windows: TrueForge logs `LocalSandboxProvider supports macOS and Linux only
+(got win32)`, and skills execute inside a sandbox, so both stay disabled without
+a cloud provider. The panel says `not configured` and `needs sandbox` rather
+than hiding it. `configure_trueforge.py --daytona-key` wires both up where a
+provider is available.
+
+**One upstream fix.** TrueForge 0.1.4 and 0.2.0-rc.0 do not start on Windows at
+all — kysely's `FileMigrationProvider` calls `await import(filePath)` with an OS
+path, so Node reads the drive letter as a URL scheme and startup dies with
+`ERR_UNSUPPORTED_ESM_URL_SCHEME` before the HTTP listener opens.
+`scripts/patch-kysely-esm.mjs` applies the documented fix from `postinstall`.
+Reproduced on both C: and D:, so it affects any Windows user.
+
 ## AI assistance disclosure
 
-Claude (Anthropic) was used extensively while building this: drafting the
-constitutive model and MCP server code, the SKILL.md search strategy, and
-the dashboard design direction, in an ongoing back-and-forth during the
-hackathon window. The physics parameterization, the inverse-identification
-approach (Gauss-Newton/Levenberg-Marquardt-style residual minimization), the
-choice of what the safety gate should actually check, and the overall
-project direction come from my own background in inverse material
-characterization (UMAT development and tensile-test/nanoindentation
-parameter fitting during my research work) — Claude wrote code to that
-direction and I reviewed and understood it before submitting, not the other
-way around. [Juni: expand this paragraph in your own words once you've
-actually walked through server.py and sma_model.py end to end — a judge can
-ask you to explain any part of this, so this disclosure should only say what
-you can personally back up.]
+Claude (Anthropic) was used extensively and wrote most of the code here, working
+to a direction I set and reviewed as it went. The physics, the problem framing,
+what the safety gate checks, and the entire design of the interface are mine.
+The section below sets out exactly which decisions were which, including the
+things Claude found that I would not have.
 
 ## Who built this, and which decisions were mine
 
@@ -182,6 +235,99 @@ inverse problems — used here as a *library/technique*, not submitted as-is;
 everything in this repo (the tools, the harness wiring, the approval gate,
 the skill file) was built fresh for this hackathon.
 
+## For judges — how to verify this in 5 minutes
+
+Three levels, depending on how much you want to set up. **Level 1 needs no API
+key and no account.**
+
+### Level 1 · See it work, no credentials (2 min)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm install
+.\start.ps1
+```
+
+`start.ps1` waits for each service and prints `[ok]` or `[FAIL]`, then opens the
+workstation at **http://localhost:8001**. Then, in a second terminal:
+
+```powershell
+.\.venv\Scripts\python.exe seed_demo.py --delay 0.8
+```
+
+That drives the **real** `evaluate_model` and `commit_calibration` functions with
+a coordinate descent standing in for the LLM, paced so you can watch. Over ~90
+seconds the model curve converges onto the measured points, the parameter gauges
+move, RMSE falls from 5.37% to 1.85%, a commit is **refused** for being too
+loose, and a second one is written.
+
+What this proves: the physics, the tools, the fit-quality gate and the whole UI.
+What it does not: the LLM or the approval gate — it calls the tool bodies
+directly, which the script says in its own docstring.
+
+### Level 2 · The real agent and the approval gate (5 min)
+
+Needs one free model key — **https://aistudio.google.com/apikey**, no card:
+
+```powershell
+.\.venv\Scripts\python.exe configure_trueforge.py --model-key <YOUR_KEY>
+.\.venv\Scripts\python.exe configure_trueforge.py --status
+```
+
+`--status` should report the MCP server registered and three tools resolved,
+which means TrueForge has actually reached `server.py`. Then either:
+
+**From the workstation** — click **▶ RUN SOLVER** at http://localhost:8001.
+
+**Or from a terminal**, if you would rather watch it stream:
+
+```powershell
+.\.venv\Scripts\python.exe run_agent.py
+```
+
+Either way the agent calls `get_experimental_data` once, iterates on
+`evaluate_model`, and then **stops**. An amber `APPROVAL REQUIRED` panel appears
+with APPROVE and DENY. Nothing has been written at this point.
+
+**Press DENY first.** That is the claim of this project — the harness refuses an
+irreversible write without a human. Then run it again and APPROVE, and the
+material card is written and `CARD COMMITTED` appears on the chart.
+
+### Level 3 · Drive it from TrueForge's own chat UI
+
+Open **http://localhost:8790**, choose the `sma-calibrator` agent, and send:
+
+> Calibrate the SMA model against the experimental data and commit the result
+> once you're confident in it.
+
+The harness shows its own tool calls and its own approval prompt. Keep the
+workstation open beside it — the `TRUEFORGE HARNESS` panel reads the agent,
+session count and registered tools back from `/api/v1`, so you can confirm the
+two windows are looking at the same run.
+
+### What to look at
+
+| Where | What it shows |
+|---|---|
+| `SENSITIVITY` tab | why `E_M` and `sig_SA_f` are recovered worst — they move the residual least, so the search has little to go on |
+| `ERROR METRICS` tab | signed residual per regime, each labelled with the parameter that governs it |
+| `SOLVER` in the left rail | the acceptance criteria `commit_calibration` enforces, evaluated live |
+| `EXPERIMENTS` | dataset provenance and the raw samples under the sweeping cursor |
+| convergence plot | the noise floor — the residual the *true* parameters produce, which no fit can beat |
+
+### If something goes wrong
+
+- **`429 ... quota exceeded`** — free Gemini tiers allow ~15 requests/minute.
+  `run_agent.py` now waits out the window and resumes automatically; if you
+  started it from the button, `.logs\agent.log` says what happened.
+- **`[FAIL] TrueForge`** — check `.logs\trueforge.log`. On Windows the harness
+  needs `scripts/patch-kysely-esm.mjs`, which `npm install` applies for you.
+- **Dashboard says `NO SIGNAL`** — `dashboard_api.py` is not running; `.\start.ps1`
+  restarts everything, `.\stop.ps1` stops it.
+- **Nothing is installed globally.** All state lives in `.venv/`,
+  `node_modules/` and `.trueforge-local/`; deleting those is a full reset.
+
 ## Quick start
 
 Everything installs into this folder — a `.venv/` for Python and a local
@@ -270,12 +416,29 @@ output, not fixtures:
 Note that this bypasses the approval gate by calling the tool bodies directly;
 it demonstrates the dashboard, not the safety gate.
 
-**One thing the dashboard deliberately does not claim.** TrueForge holds
-`commit_calibration` *before* its Python body runs, so `progress_state.json` has
-no signal for "a human is being asked right now". The dashboard shows an
-amber state labelled `inferred` when a converged fit goes quiet, and says in the
-UI that the real approve/reject happens in TrueForge's own chat. It runs
-alongside that window, not instead of it.
+### Where the approval actually happens
+
+The gate belongs to TrueForge, not to this dashboard. `commit_calibration` is
+annotated `destructiveHint`, the agent's MCP entry sets
+`require_approval_for_tools: ["@destructive"]`, and the harness stops the tool
+*before* its Python body runs and emits `tool.approval_required`. Nothing
+proceeds until a `user.tool_approval` decision is posted back to the harness.
+
+What the dashboard can see depends on how the run was started, and it says which
+case it is rather than papering over the difference:
+
+- **Started by `run_agent.py`** — including the dashboard's own RUN SOLVER
+  button — the runner publishes the pending call, the dashboard shows APPROVE
+  and DENY, and the decision is relayed to TrueForge. This is observed, not
+  inferred. No decision is not an approval: the wait times out into a denial.
+- **Started from TrueForge's chat UI**, the pending call never reaches this
+  process, and `progress_state.json` carries no signal for "a human is being
+  asked right now". The dashboard then shows an amber state explicitly labelled
+  `inferred`, and the approve/reject happens in TrueForge's own window.
+
+Either way the dashboard is a window onto the harness, not a replacement for it —
+which is why it reports TrueForge's agent, session count, registered tools and
+sandbox state read back from the harness rather than restated locally.
 
 ## Wiring it into TrueForge
 
@@ -325,12 +488,15 @@ data and commit the result once you're confident in it."* Then watch it call
 
 | File | What |
 |---|---|
-| `sma_model.py` | the physics: constitutive model + synthetic data generator |
-| `server.py` | the MCP server: 3 tools wrapping the model |
-| `SKILL.md` | search-strategy guidance loaded into the agent |
-| `dashboard_api.py` | stdlib-only read-only feed of run progress on `:8001` |
-| `dashboard.html` | the live instrument dashboard (single file, no build) |
-| `seed_demo.py` | drives a real search locally so the dashboard has data |
+| `sma_model.py` | the physics: constitutive model, regime transitions, synthetic data generator |
+| `server.py` | the MCP server: 3 tools wrapping the model, one of them gated |
+| `SKILL.md` | search-strategy guidance, loadable as a TrueForge skill |
+| `run_agent.py` | drives the agent over TrueForge's API and handles the approval gate |
+| `configure_trueforge.py` | registers MCP server, model, skill and sandbox through the API |
+| `dashboard_api.py` | serves the workstation and its feed on `:8001`, and relays approvals |
+| `dashboard.html` | the NEUTRINO workstation (single file, no build step) |
+| `seed_demo.py` | drives a real search locally so the dashboard has data without an LLM |
+| `start.ps1` / `stop.ps1` | bring the three services up with health checks, and back down |
 | `run_trueforge.ps1` | starts TrueForge with all state pinned inside this folder |
 | `scripts/patch-kysely-esm.mjs` | Windows ESM-loader fix, applied on `npm install` |
 | `requirements.txt` | fastmcp, numpy |

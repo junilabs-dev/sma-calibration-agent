@@ -459,6 +459,22 @@ button{font-family:inherit;cursor:pointer}
     </div>
 
     <div class="sec">
+      <div class="sechead">
+        <h3>TRUEFORGE HARNESS</h3>
+        <div class="live" id="tf-live"><i></i><span id="tf-state">—</span></div>
+      </div>
+      <p class="note" style="margin:0 0 9px">The agent loop, the MCP dispatch and the
+      approval gate all run in TrueForge. This dashboard watches — it does not host them.</p>
+      <table class="kv">
+        <tr><td>AGENT</td><td id="tf-agent">—</td></tr>
+        <tr><td>SESSIONS</td><td id="tf-sessions">—</td></tr>
+        <tr><td>MCP TOOLS</td><td id="tf-tools">—</td></tr>
+        <tr><td>SANDBOX</td><td id="tf-sandbox">—</td></tr>
+        <tr><td>SKILLS</td><td id="tf-skills">—</td></tr>
+      </table>
+    </div>
+
+    <div class="sec">
       <div class="sechead"><h3>TRACE CURSOR</h3></div>
       <table class="kv">
         <tr><td>STRAIN ε</td><td id="c-eps">—</td></tr>
@@ -1166,12 +1182,25 @@ document.querySelector('.nav').addEventListener('click', ev => {
   showPanes(key);
 });
 
-$('wstabs').addEventListener('click', ev => {
-  const b = ev.target.closest('button'); if (!b) return;
+function selectTab(name) {
+  const b = [...$('wstabs').children].find(t => t.dataset.tab === name);
+  if (!b) return false;
   for (const t of $('wstabs').children) t.classList.toggle('on', t === b);
   for (const n of document.querySelectorAll('.navitem')) n.classList.toggle('on', n.dataset.view === 'dashboard');
-  showPanes(b.dataset.tab);
+  showPanes(name);
+  return true;
+}
+
+$('wstabs').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  selectTab(b.dataset.tab);
+  location.hash = b.dataset.tab;
 });
+
+// Deep-linkable panels: useful for jumping straight to a view, and for
+// screenshotting one without clicking through to it.
+addEventListener('hashchange', () => selectTab(location.hash.slice(1)));
+if (location.hash) selectTab(location.hash.slice(1));
 
 // The button starts the same run_agent.py a terminal would; the harness still
 // holds the commit for approval, so this cannot push anything through the gate.
@@ -1238,10 +1267,30 @@ if (window.ResizeObserver) {
   for (const id of ['chart', 'resid', 'conv']) ro.observe($(id));
 }
 
-fetch('/meta').then(r => r.json()).then(m => {
-  if (m.model) { $('sel-model').firstChild.textContent = m.model; $('b-model').textContent = m.model; }
-  if (m.version) $('eng-ver').textContent = 'v' + m.version;
-}).catch(() => {});
+// Polled rather than read once: the harness can go down mid-run, and a panel
+// asserting a stale "connected" would be worse than one that goes blank.
+async function pollMeta() {
+  try {
+    const m = await (await fetch('/meta', { cache: 'no-store' })).json();
+    if (m.model) { $('sel-model').firstChild.textContent = m.model; $('b-model').textContent = m.model; }
+    if (m.version) $('eng-ver').textContent = 'v' + m.version;
+
+    const h = m.harness || {};
+    $('tf-live').className = 'live' + (h.reachable ? '' : ' off');
+    $('tf-state').textContent = h.reachable ? 'CONNECTED' : 'UNREACHABLE';
+    $('tf-agent').textContent = h.agent || '—';
+    $('tf-sessions').textContent = h.sessions ? String(h.sessions) : '—';
+    $('tf-tools').textContent = (h.tools && h.tools.length) ? h.tools.length + ' registered' : '—';
+    $('tf-sandbox').textContent = h.reachable ? (h.sandbox ? 'enabled' : 'not configured') : '—';
+    $('tf-skills').textContent = h.reachable ? (h.skills ? 'enabled' : 'needs sandbox') : '—';
+    for (const id of ['tf-sandbox', 'tf-skills']) {
+      $(id).classList.toggle('warn', h.reachable && !(id === 'tf-sandbox' ? h.sandbox : h.skills));
+    }
+  } catch {
+    $('tf-live').className = 'live off';
+    $('tf-state').textContent = 'UNREACHABLE';
+  }
+}
 
 buildParams();
 render();
@@ -1250,6 +1299,8 @@ poll();
 setInterval(poll, POLL_MS);
 pollPending();
 setInterval(pollPending, 900);
+pollMeta();
+setInterval(pollMeta, 5000);
 </script>
 </body>
 </html>

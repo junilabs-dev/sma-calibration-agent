@@ -49,17 +49,56 @@ DECISION_PATH = HERE / "approval_decision.json"
 _agent: "subprocess.Popen | None" = None
 
 
-def _meta() -> dict:
-    """Model and harness details for the header. Best-effort: the dashboard is
-    still usable when TrueForge is down, so a failure here is not an error."""
-    out = {"version": "0.1.0", "model": None, "agent_running": _agent is not None and _agent.poll() is None}
+def _tf(path: str):
+    """GET one TrueForge endpoint, or None. Best-effort throughout: the dashboard
+    stays usable when the harness is down, so an unreachable harness is a state
+    to display, not an error to raise."""
     try:
-        with urllib.request.urlopen(f"{TRUEFORGE}/api/v1/models", timeout=3) as r:
-            models = json.loads(r.read()).get("data", [])
-            if models:
-                out["model"] = models[0].get("name")
+        with urllib.request.urlopen(f"{TRUEFORGE}/api/v1{path}", timeout=3) as r:
+            return json.loads(r.read()).get("data")
     except Exception:
-        pass
+        return None
+
+
+def _meta() -> dict:
+    """What the dashboard shows about the harness driving the run.
+
+    The agent, the session, the tool registration and the approval gate all
+    belong to TrueForge; this dashboard only watches. Reading these back from
+    the harness rather than restating them locally means the panel goes blank
+    when the harness is actually gone, instead of asserting a state it cannot
+    see."""
+    out = {
+        "version": "0.1.0",
+        "model": None,
+        "agent_running": _agent is not None and _agent.poll() is None,
+        "harness": {"reachable": False, "agent": None, "session": None, "tools": [], "sessions": 0},
+    }
+
+    models = _tf("/models")
+    if models:
+        out["model"] = models[0].get("name")
+
+    caps = _tf("/capabilities")
+    h = out["harness"]
+    if caps is not None:
+        h["reachable"] = True
+        h["sandbox"] = bool(caps.get("sandbox", {}).get("enabled"))
+        h["skills"] = bool(caps.get("skill", {}).get("enabled"))
+
+    agents = _tf("/agents")
+    if agents:
+        h["agent"] = agents[0].get("name")
+
+    sessions = _tf("/sessions")
+    if sessions:
+        h["sessions"] = len(sessions)
+        h["session"] = sessions[0].get("id")
+
+    tools = _tf("/mcp-servers/sma-calibration/tools")
+    if tools:
+        h["tools"] = [t.get("name") for t in tools if t.get("name")]
+
     return out
 
 
@@ -143,11 +182,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         PENDING_PATH.unlink(missing_ok=True)
         DECISION_PATH.unlink(missing_ok=True)
+        # Logged rather than discarded: a run started here can fail for reasons
+        # only the runner sees -- a rate limit, a bad key, a model withdrawn by
+        # the provider -- and sending that to DEVNULL leaves the dashboard simply
+        # going quiet with no way to find out why.
+        logs = HERE / ".logs"
+        logs.mkdir(exist_ok=True)
         try:
+            log = open(logs / "agent.log", "w", encoding="utf-8")
             _agent = subprocess.Popen(
-                [sys.executable, str(HERE / "run_agent.py")],
-                cwd=str(HERE),
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                [sys.executable, "-u", str(HERE / "run_agent.py"), "--await-dashboard"],
+                cwd=str(HERE), stdout=log, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
             )
         except OSError as e:
             self._send(500, json.dumps({"error": str(e)[:120]}).encode(), "application/json")
