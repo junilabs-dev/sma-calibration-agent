@@ -30,6 +30,7 @@ you can personally back up.]
 
 **Junaid Alam** — Mechanical Engineering, Panjab University, with research
 internships at NIT Trichy and IIT Ropar.
+[LinkedIn](https://www.linkedin.com/in/junaidalam-mechanical)
 
 I work at the intersection of computational mechanics and material modelling:
 finite-element analysis in Abaqus, UMAT/VUMAT development, material
