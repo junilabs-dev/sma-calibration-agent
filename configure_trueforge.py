@@ -56,7 +56,9 @@ SKILL_NAME = "sma-material-calibration"
 # A provider manifest must list at least one model (`models`, minItems 1) -- a
 # provider registered with only an api_key is rejected with a 400.
 MODEL_PROVIDERS = {
-    "gemini": ("google-gemini", "GEMINI_API_KEY", "gemini-2.0-flash", "gemini-2.0-flash"),
+    # gemini-2.5-flash is on Google's free tier, which is the only one of these
+    # three that needs no billing set up. 2.0-flash is not on that list.
+    "gemini": ("google-gemini", "GEMINI_API_KEY", "gemini-2.5-flash", "gemini-2.5-flash"),
     "anthropic": ("anthropic", "ANTHROPIC_API_KEY", "claude-sonnet-4-5-20250929", "claude-sonnet-4-5"),
     "openai": ("openai", "OPENAI_API_KEY", "gpt-4o", "gpt-4o"),
 }
