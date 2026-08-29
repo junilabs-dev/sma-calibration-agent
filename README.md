@@ -187,12 +187,29 @@ output, not fixtures:
 Note that this bypasses the approval gate by calling the tool bodies directly;
 it demonstrates the dashboard, not the safety gate.
 
-**One thing the dashboard deliberately does not claim.** TrueForge holds
-`commit_calibration` *before* its Python body runs, so `progress_state.json` has
-no signal for "a human is being asked right now". The dashboard shows an
-amber state labelled `inferred` when a converged fit goes quiet, and says in the
-UI that the real approve/reject happens in TrueForge's own chat. It runs
-alongside that window, not instead of it.
+### Where the approval actually happens
+
+The gate belongs to TrueForge, not to this dashboard. `commit_calibration` is
+annotated `destructiveHint`, the agent's MCP entry sets
+`require_approval_for_tools: ["@destructive"]`, and the harness stops the tool
+*before* its Python body runs and emits `tool.approval_required`. Nothing
+proceeds until a `user.tool_approval` decision is posted back to the harness.
+
+What the dashboard can see depends on how the run was started, and it says which
+case it is rather than papering over the difference:
+
+- **Started by `run_agent.py`** — including the dashboard's own RUN SOLVER
+  button — the runner publishes the pending call, the dashboard shows APPROVE
+  and DENY, and the decision is relayed to TrueForge. This is observed, not
+  inferred. No decision is not an approval: the wait times out into a denial.
+- **Started from TrueForge's chat UI**, the pending call never reaches this
+  process, and `progress_state.json` carries no signal for "a human is being
+  asked right now". The dashboard then shows an amber state explicitly labelled
+  `inferred`, and the approve/reject happens in TrueForge's own window.
+
+Either way the dashboard is a window onto the harness, not a replacement for it —
+which is why it reports TrueForge's agent, session count, registered tools and
+sandbox state read back from the harness rather than restated locally.
 
 ## Wiring it into TrueForge
 
