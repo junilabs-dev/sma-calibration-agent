@@ -182,11 +182,18 @@ class Handler(BaseHTTPRequestHandler):
             return
         PENDING_PATH.unlink(missing_ok=True)
         DECISION_PATH.unlink(missing_ok=True)
+        # Logged rather than discarded: a run started here can fail for reasons
+        # only the runner sees -- a rate limit, a bad key, a model withdrawn by
+        # the provider -- and sending that to DEVNULL leaves the dashboard simply
+        # going quiet with no way to find out why.
+        logs = HERE / ".logs"
+        logs.mkdir(exist_ok=True)
         try:
+            log = open(logs / "agent.log", "w", encoding="utf-8")
             _agent = subprocess.Popen(
-                [sys.executable, str(HERE / "run_agent.py")],
-                cwd=str(HERE),
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                [sys.executable, "-u", str(HERE / "run_agent.py"), "--await-dashboard"],
+                cwd=str(HERE), stdout=log, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
             )
         except OSError as e:
             self._send(500, json.dumps({"error": str(e)[:120]}).encode(), "application/json")

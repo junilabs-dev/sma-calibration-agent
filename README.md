@@ -235,6 +235,99 @@ inverse problems — used here as a *library/technique*, not submitted as-is;
 everything in this repo (the tools, the harness wiring, the approval gate,
 the skill file) was built fresh for this hackathon.
 
+## For judges — how to verify this in 5 minutes
+
+Three levels, depending on how much you want to set up. **Level 1 needs no API
+key and no account.**
+
+### Level 1 · See it work, no credentials (2 min)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm install
+.\start.ps1
+```
+
+`start.ps1` waits for each service and prints `[ok]` or `[FAIL]`, then opens the
+workstation at **http://localhost:8001**. Then, in a second terminal:
+
+```powershell
+.\.venv\Scripts\python.exe seed_demo.py --delay 0.8
+```
+
+That drives the **real** `evaluate_model` and `commit_calibration` functions with
+a coordinate descent standing in for the LLM, paced so you can watch. Over ~90
+seconds the model curve converges onto the measured points, the parameter gauges
+move, RMSE falls from 5.37% to 1.85%, a commit is **refused** for being too
+loose, and a second one is written.
+
+What this proves: the physics, the tools, the fit-quality gate and the whole UI.
+What it does not: the LLM or the approval gate — it calls the tool bodies
+directly, which the script says in its own docstring.
+
+### Level 2 · The real agent and the approval gate (5 min)
+
+Needs one free model key — **https://aistudio.google.com/apikey**, no card:
+
+```powershell
+.\.venv\Scripts\python.exe configure_trueforge.py --model-key <YOUR_KEY>
+.\.venv\Scripts\python.exe configure_trueforge.py --status
+```
+
+`--status` should report the MCP server registered and three tools resolved,
+which means TrueForge has actually reached `server.py`. Then either:
+
+**From the workstation** — click **▶ RUN SOLVER** at http://localhost:8001.
+
+**Or from a terminal**, if you would rather watch it stream:
+
+```powershell
+.\.venv\Scripts\python.exe run_agent.py
+```
+
+Either way the agent calls `get_experimental_data` once, iterates on
+`evaluate_model`, and then **stops**. An amber `APPROVAL REQUIRED` panel appears
+with APPROVE and DENY. Nothing has been written at this point.
+
+**Press DENY first.** That is the claim of this project — the harness refuses an
+irreversible write without a human. Then run it again and APPROVE, and the
+material card is written and `CARD COMMITTED` appears on the chart.
+
+### Level 3 · Drive it from TrueForge's own chat UI
+
+Open **http://localhost:8790**, choose the `sma-calibrator` agent, and send:
+
+> Calibrate the SMA model against the experimental data and commit the result
+> once you're confident in it.
+
+The harness shows its own tool calls and its own approval prompt. Keep the
+workstation open beside it — the `TRUEFORGE HARNESS` panel reads the agent,
+session count and registered tools back from `/api/v1`, so you can confirm the
+two windows are looking at the same run.
+
+### What to look at
+
+| Where | What it shows |
+|---|---|
+| `SENSITIVITY` tab | why `E_M` and `sig_SA_f` are recovered worst — they move the residual least, so the search has little to go on |
+| `ERROR METRICS` tab | signed residual per regime, each labelled with the parameter that governs it |
+| `SOLVER` in the left rail | the acceptance criteria `commit_calibration` enforces, evaluated live |
+| `EXPERIMENTS` | dataset provenance and the raw samples under the sweeping cursor |
+| convergence plot | the noise floor — the residual the *true* parameters produce, which no fit can beat |
+
+### If something goes wrong
+
+- **`429 ... quota exceeded`** — free Gemini tiers allow ~15 requests/minute.
+  `run_agent.py` now waits out the window and resumes automatically; if you
+  started it from the button, `.logs\agent.log` says what happened.
+- **`[FAIL] TrueForge`** — check `.logs\trueforge.log`. On Windows the harness
+  needs `scripts/patch-kysely-esm.mjs`, which `npm install` applies for you.
+- **Dashboard says `NO SIGNAL`** — `dashboard_api.py` is not running; `.\start.ps1`
+  restarts everything, `.\stop.ps1` stops it.
+- **Nothing is installed globally.** All state lives in `.venv/`,
+  `node_modules/` and `.trueforge-local/`; deleting those is a full reset.
+
 ## Quick start
 
 Everything installs into this folder — a `.venv/` for Python and a local
