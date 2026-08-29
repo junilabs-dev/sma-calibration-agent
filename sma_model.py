@@ -83,6 +83,29 @@ def _strain_path() -> np.ndarray:
     return np.concatenate([load, unload[1:]])  # don't duplicate the peak point
 
 
+def transition_strains(params: dict) -> dict:
+    """The four strains where the flag changes regime, for the given params:
+
+        eps1  end of austenite-elastic loading  (below it, E_A governs)
+        eps2  end of the forward plateau        (above it, E_M governs)
+        eps3  start of the reverse plateau on unloading
+        eps4  end of the reverse plateau        (below it, E_A governs again)
+
+    Exposed so callers can attribute a residual to the regime it falls in
+    rather than averaging across regimes that different parameters control.
+    """
+    E_A, E_M, eps_L = params["E_A"], params["E_M"], params["eps_L"]
+    eps1 = params["sig_AS_s"] / E_A
+    eps2 = eps1 + eps_L
+    sigma_max = params["sig_AS_f"] + E_M * (EPS_MAX - eps2)
+    return {
+        "eps1": eps1,
+        "eps2": eps2,
+        "eps3": EPS_MAX - (sigma_max - params["sig_SA_s"]) / E_M,
+        "eps4": params["sig_SA_f"] / E_A,
+    }
+
+
 def evaluate_superelastic(params: dict, strain: np.ndarray) -> np.ndarray:
     """Predicted stress at each strain point along a single 0->EPS_MAX->0
     load/unload cycle. Raises ValueError with a human-readable reason if

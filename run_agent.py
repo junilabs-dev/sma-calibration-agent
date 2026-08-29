@@ -53,16 +53,23 @@ sits between sig_SA_s and sig_SA_f, the initial slope is E_A, and the strain
 span of the loading plateau is about eps_L. A starting guess built that way is
 far better than range midpoints and saves several iterations.
 
-Then use evaluate_model's residual_summary to move deliberately:
-  * mean_signed_error_loading positive  -> the loading plateau is too high,
-    lower sig_AS_s and sig_AS_f (negative -> raise them).
-  * mean_signed_error_unloading positive -> lower sig_SA_s and sig_SA_f.
-  * worst_on_branch and worst_at_strain tell you which region is still wrong;
-    an error concentrated at low strain is E_A, one just past the loading
-    plateau is E_M or eps_L.
-Move the parameters the summary implicates, by a step proportional to the error
-it reports, and change several at once when the summary points at several. If a
-call returns valid=false, read the reason -- it names the parameter to fix.
+Then use evaluate_model's residual_summary to move deliberately. It reports a
+signed mean error per regime of the curve, in mean_signed_error_by_region_mpa,
+and names the parameter governing each in governed_by. A regime's mean is
+positive when the model sits above the measurement there, so:
+
+  * plateau_loading positive      -> lower sig_AS_s (and sig_AS_f with it)
+  * plateau_unloading positive    -> lower sig_SA_s (and sig_SA_f with it)
+  * elastic_loading off zero      -> E_A is wrong
+  * post_plateau_loading off zero -> E_M is wrong
+
+Attend to whichever regime is furthest from zero, and read only that regime
+when deciding a stress parameter -- the regimes are governed by different
+parameters, so do not reason about a branch as a whole. If the plateau means
+are near zero but the RMSE is still high, the plateau is the wrong length:
+adjust eps_L. Move by a step proportional to the error reported, and change
+several parameters at once when several regimes are off. If a call returns
+valid=false, read the reason -- it names the parameter to fix.
 
 Only once rmse_pct_of_peak is comfortably under the pass threshold, call
 commit_calibration with a justification stating the final RMSE and anything
