@@ -61,8 +61,8 @@ body{
 .link.off i{background:var(--rust)}
 .link.off{color:var(--rust)}
 
-.stage{display:grid;grid-template-columns:1fr 316px;gap:9px;min-height:0}
-.rack{display:grid;grid-template-columns:1fr 316px;gap:9px;min-height:0}
+.stage{display:grid;grid-template-columns:1fr 338px;gap:9px;min-height:0}
+.rack{display:grid;grid-template-columns:1fr 338px;gap:9px;min-height:0}
 .panel{
   position:relative;
   background:var(--panel);
@@ -83,6 +83,19 @@ body{
 .phead .note{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:.06em}
 .pbody{flex:1;min-height:0;position:relative}
 .pbody svg{display:block;width:100%;height:100%}
+
+/* chart column: response on top, residual strip beneath a hairline */
+.chartstack{flex:1;min-height:0;display:flex;flex-direction:column}
+.chartstack .main{flex:1;min-height:0;position:relative}
+.chartstack .resid{
+  flex:none;height:92px;position:relative;
+  border-top:1px solid var(--rule);
+}
+.residlabel{
+  position:absolute;top:5px;left:11px;z-index:1;pointer-events:none;
+  font-size:9px;letter-spacing:.17em;color:var(--dim);
+}
+.chartstack svg{display:block;width:100%;height:100%}
 
 .legend{display:flex;gap:14px;font-size:9.5px;letter-spacing:.09em;color:var(--dim)}
 .legend span{display:flex;align-items:center;gap:5px}
@@ -108,6 +121,53 @@ body{
 .hgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;max-width:230px}
 .hcell span{font-size:9px;letter-spacing:.14em;color:var(--dim);display:block}
 .hcell b{font-family:var(--mono);font-size:12.5px;font-weight:500;display:block;margin-top:3px}
+
+.tabs{display:flex;gap:0;margin:2px 0 0;border-bottom:1px solid var(--rule)}
+.tabs button{
+  appearance:none;background:none;border:0;cursor:pointer;
+  padding:6px 11px 6px 0;margin-right:13px;
+  font-family:var(--sans);font-size:9.5px;letter-spacing:.17em;color:var(--dim);
+  border-bottom:1px solid transparent;margin-bottom:-1px;
+}
+.tabs button:hover{color:var(--muted)}
+.tabs button.on{color:var(--teal);border-bottom-color:var(--teal)}
+
+.pane{display:none;padding-top:11px;min-height:0}
+.pane.on{display:block}
+.panenote{font-size:9.5px;line-height:1.5;color:var(--dim);margin-bottom:10px;max-width:280px}
+
+.kv{border-collapse:collapse;width:100%;max-width:280px}
+.kv td{padding:2.5px 0;font-size:9.5px;letter-spacing:.11em;color:var(--dim);white-space:nowrap}
+.kv td:last-child{
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.01em;
+  color:var(--ink);text-align:right;font-variant-numeric:tabular-nums;
+}
+.kv td.warn:last-child{color:var(--amber)}
+
+.checks{list-style:none;max-width:288px}
+.checks li{display:flex;gap:8px;align-items:baseline;padding:4.5px 0;border-bottom:1px solid var(--rule-soft)}
+.checks li:last-child{border-bottom:0}
+.checks .mark{font-family:var(--mono);font-size:10px;flex:none;width:26px;letter-spacing:.04em}
+.checks .what{font-size:9.5px;line-height:1.4;color:var(--muted);flex:1}
+.checks .what em{font-style:normal;font-family:var(--mono);color:var(--dim)}
+.checks li.pass .mark{color:var(--teal)}
+.checks li.fail .mark{color:var(--rust)}
+.checks li.fail .what{color:var(--ink)}
+.checks li.warn .mark{color:var(--amber)}
+.checks li.idle .mark{color:var(--dim)}
+
+.rawtab{border-collapse:collapse;width:100%;max-width:288px;font-family:var(--mono);font-size:10px}
+.rawtab td{padding:2px 0;font-variant-numeric:tabular-nums;color:var(--muted);text-align:right}
+.rawtab td:first-child{text-align:left;color:var(--dim)}
+.rawtab tr.at td{color:var(--teal)}
+.rawtab tr.hd td{color:var(--dim);font-size:8.5px;letter-spacing:.12em;padding-bottom:4px}
+
+.log{list-style:none;margin-top:8px;max-width:270px;font-family:var(--mono);font-size:9.5px;line-height:1.65}
+.log li{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log li b{color:var(--dim);font-weight:400;margin-right:7px}
+.log li.ok{color:var(--teal)}
+.log li.bad{color:var(--rust)}
+.log li:first-child{color:var(--ink)}
 
 .gaugerow{flex:1;display:grid;grid-template-columns:repeat(7,1fr);min-height:0;align-items:stretch}
 .gauge{
@@ -178,7 +238,13 @@ body{
           <span><i class="pred"></i>model</span>
         </div>
       </div>
-      <div class="pbody"><svg id="chart"></svg></div>
+      <div class="chartstack">
+        <div class="main"><svg id="chart"></svg></div>
+        <div class="resid">
+          <span class="residlabel">RESIDUAL · MODEL − MEASURED · MPa</span>
+          <svg id="resid"></svg>
+        </div>
+      </div>
     </section>
 
     <aside class="wheelcol">
@@ -191,6 +257,38 @@ body{
         <div class="hcell"><span>PASS BAR</span><b id="h-bar">3.00 %</b></div>
         <div class="hcell"><span>PEAK σ</span><b id="h-peak">—</b></div>
         <div class="hcell"><span>POINTS</span><b id="h-pts">—</b></div>
+      </div>
+
+      <div class="hrule"></div>
+
+      <nav class="tabs" id="tabs">
+        <button data-tab="trace" class="on">TRACE</button>
+        <button data-tab="checks">CHECKS</button>
+        <button data-tab="source">SOURCE</button>
+      </nav>
+
+      <div class="pane on" id="pane-trace">
+        <table class="kv">
+          <tr><td>STRAIN ε</td><td id="c-eps">—</td></tr>
+          <tr><td>σ MEASURED</td><td id="c-meas">—</td></tr>
+          <tr><td>σ MODEL</td><td id="c-model">—</td></tr>
+          <tr><td>Δ RESIDUAL</td><td id="c-res">—</td></tr>
+          <tr><td>REGIME</td><td id="c-reg">—</td></tr>
+        </table>
+        <span class="hlabel" style="margin-top:14px;display:block">ACTIVITY</span>
+        <ul class="log" id="log"></ul>
+      </div>
+
+      <div class="pane" id="pane-checks">
+        <p class="panenote">Gate applied by <span class="mono">commit_calibration</span>
+           before it writes. Evaluated live against the current parameters.</p>
+        <ul class="checks" id="checks"></ul>
+      </div>
+
+      <div class="pane" id="pane-source">
+        <table class="kv" id="srcmeta"></table>
+        <span class="hlabel" style="margin-top:13px;display:block">TRACE · AT CURSOR</span>
+        <table class="rawtab" id="rawtab"></table>
       </div>
     </aside>
   </main>
@@ -231,6 +329,9 @@ const API = location.protocol === 'file:' ? 'http://localhost:8001/progress' : '
 const POLL_MS = 1200;
 const PASS_PCT = 3.0;
 const PENDING_AFTER_MS = 8000;
+// RMSE of the true parameter set against this noisy trace -- the best any fit
+// can do here. Measured, not guessed: evaluate_model at TRUE_PARAMS returns it.
+const NOISE_FLOOR_PCT = 1.4;
 
 const PARAMS = [
   ['E_A',      'austenite E',   'MPa', 30000, 70000, 0],
@@ -300,6 +401,7 @@ function apply(data) {
     else if (ev.type === 'commit_success') { committed = ev; rejectIsLatest = false; }
     else if (ev.type === 'commit_attempt' && !ev.committed) { reject = ev; rejectIsLatest = true; }
   }
+  view.rawHistory = hist;
   view.evals = evals;
   view.committed = committed;
   view.reject = reject;
@@ -373,21 +475,106 @@ function wheelDegPerSec() {
   return 0.8 + t * t * 11;
 }
 
+// Index the cursor sweeps to, in trace order. Kept in sample space rather than
+// pixels so the readout is always an actual measured point, never interpolated.
+let cursorPos = 0;
+const SWEEP_SAMPLES_PER_SEC = 14;
+
 let angle = 0, prevFrame = performance.now();
 function spinFrame(now) {
   const dt = Math.min((now - prevFrame) / 1000, 0.1);
   prevFrame = now;
   angle = (angle + wheelDegPerSec() * dt) % 360;
   if (spin) spin.style.transform = 'rotate(' + angle.toFixed(3) + 'deg)';
+
+  const n = view.experimental && view.experimental.strain ? view.experimental.strain.length : 0;
+  if (n) {
+    cursorPos = (cursorPos + SWEEP_SAMPLES_PER_SEC * dt) % n;
+    paintCursor(Math.floor(cursorPos));
+  }
   requestAnimationFrame(spinFrame);
+}
+
+const cursorLine = () => document.getElementById('sweep');
+
+function paintCursor(i) {
+  const exp = view.experimental;
+  if (!exp) return;
+  // Always the last evaluate: a commit_success carries the parameters but not
+  // the curve, so reading the model value off it leaves the readout blank
+  // exactly when the run has finished and someone is looking at it.
+  const src = latestEval();
+  const pred = src && src.predicted_stress_mpa ? src.predicted_stress_mpa : null;
+
+  const eps = exp.strain[i], meas = exp.stress_mpa[i];
+  const model = pred && i < pred.length ? pred[i] : null;
+  const res = model === null ? null : model - meas;
+
+  $('c-eps').textContent = eps.toFixed(5);
+  $('c-meas').textContent = meas.toFixed(1) + ' MPa';
+  $('c-model').textContent = model === null ? '—' : model.toFixed(1) + ' MPa';
+  const rc = $('c-res').parentElement;
+  $('c-res').textContent = res === null ? '—' : (res >= 0 ? '+' : '') + res.toFixed(1) + ' MPa';
+  rc.classList.toggle('warn', res !== null && Math.abs(res) > 25);
+
+  const cur = view.committed ? view.committed.params : (latestEval() || {}).params;
+  const rg = regimes(cur, Math.max.apply(null, exp.strain));
+  const loading = i <= exp.strain.indexOf(Math.max.apply(null, exp.strain));
+  let label = '—';
+  if (rg) {
+    if (loading) label = eps < rg.eps1 ? 'elastic · E_A' : eps <= rg.eps2 ? 'plateau · σAS' : 'post · E_M';
+    else label = (eps >= rg.eps4 && eps <= rg.eps3) ? 'reverse · σSA' : 'elastic · E_A';
+  }
+  $('c-reg').textContent = label;
+
+  // Raw values around the cursor: the plotted trace, readable as numbers.
+  const tab = $('rawtab');
+  if (tab && tab.offsetParent) {
+    let html = '<tr class="hd"><td>#</td><td>ε</td><td>σ MEAS</td><td>σ MODEL</td></tr>';
+    for (let k = i - 2; k <= i + 2; k++) {
+      if (k < 0 || k >= exp.strain.length) continue;
+      const m = pred && k < pred.length ? pred[k].toFixed(1) : '—';
+      html += '<tr class="' + (k === i ? 'at' : '') + '"><td>' + k + '</td><td>' +
+              exp.strain[k].toFixed(5) + '</td><td>' + exp.stress_mpa[k].toFixed(1) +
+              '</td><td>' + m + '</td></tr>';
+    }
+    tab.innerHTML = html;
+  }
+
+  const line = cursorLine();
+  if (line && chartGeom) {
+    const x = chartGeom.px(eps);
+    line.setAttribute('x1', x.toFixed(1));
+    line.setAttribute('x2', x.toFixed(1));
+    line.setAttribute('y1', chartGeom.top);
+    line.setAttribute('y2', chartGeom.bottom);
+    line.setAttribute('opacity', '0.5');
+  }
 }
 
 const chartSvg = $('chart');
 const PAD = { l: 54, r: 16, t: 14, b: 30 };
+// Scale published by the last draw, so the sweeping cursor can position itself
+// between redraws without recomputing the layout on every frame.
+let chartGeom = null;
 
 function niceCeil(v) {
   const step = Math.pow(10, Math.floor(Math.log10(v))) / 2;
   return Math.ceil(v / step) * step;
+}
+
+// Same transitions the model uses, so the bands mark where the current guess
+// thinks each regime begins -- they move as the fit changes, which is the point.
+function regimes(p, epsMax) {
+  if (!p) return null;
+  const eps1 = p.sig_AS_s / p.E_A;
+  const eps2 = eps1 + p.eps_L;
+  const sigMax = p.sig_AS_f + p.E_M * (epsMax - eps2);
+  return {
+    eps1, eps2,
+    eps3: epsMax - (sigMax - p.sig_SA_s) / p.E_M,
+    eps4: p.sig_SA_f / p.E_A,
+  };
 }
 
 function drawChart() {
@@ -406,6 +593,7 @@ function drawChart() {
   const yMax = niceCeil(Math.max.apply(null, exp.stress_mpa) * 1.06);
   const px = v => PAD.l + (v / xMax) * (W - PAD.l - PAD.r);
   const py = v => H - PAD.b - (v / yMax) * (H - PAD.t - PAD.b);
+  chartGeom = { px, top: PAD.t, bottom: H - PAD.b };
 
   let g = '';
   for (let i = 0; i <= 5; i++) {
@@ -418,6 +606,25 @@ function drawChart() {
   }
   g += '<text x="' + (PAD.l - 9) + '" y="' + (PAD.t + 1) + '" fill="#4E565E" font-family="IBM Plex Sans,sans-serif" font-size="9" text-anchor="end" letter-spacing="1.5">MPa</text>' +
        '<text x="' + (W - PAD.r).toFixed(1) + '" y="' + (H - 6).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Sans,sans-serif" font-size="9" text-anchor="end" letter-spacing="1.5">STRAIN ε</text>';
+
+  // Regime bands sit under everything: they say which parameter governs the
+  // part of the curve you are looking at, which is the whole reading task.
+  let bands = '';
+  const cur = view.committed ? view.committed.params : (latestEval() || {}).params;
+  const rg = regimes(cur, Math.max.apply(null, exp.strain));
+  if (rg && rg.eps1 > 0 && rg.eps2 > rg.eps1 && rg.eps2 < xMax) {
+    const span = (a, b, fill) =>
+      '<rect x="' + px(a).toFixed(1) + '" y="' + PAD.t + '" width="' + Math.max(0, px(b) - px(a)).toFixed(1) +
+      '" height="' + (H - PAD.t - PAD.b).toFixed(1) + '" fill="' + fill + '"/>';
+    const mark = (x, label) =>
+      '<line x1="' + px(x).toFixed(1) + '" y1="' + PAD.t + '" x2="' + px(x).toFixed(1) + '" y2="' + (H - PAD.b).toFixed(1) +
+      '" stroke="#6FA8A3" stroke-width="1" stroke-dasharray="2 4" opacity="0.5"/>' +
+      '<text x="' + (px(x) + 4).toFixed(1) + '" y="' + (PAD.t + 10) + '" fill="#6FA8A3" font-family="IBM Plex Mono,monospace" font-size="8" opacity="0.75" letter-spacing="1">' + label + '</text>';
+    bands = span(0, rg.eps1, 'rgba(232,229,222,0.022)') +
+            span(rg.eps1, rg.eps2, 'rgba(111,168,163,0.055)') +
+            span(rg.eps2, xMax, 'rgba(232,229,222,0.022)') +
+            mark(rg.eps1, 'ε1 E_A') + mark(rg.eps2, 'ε2 E_M');
+  }
 
   let dots = '';
   for (let i = 0; i < exp.strain.length; i++) {
@@ -459,7 +666,53 @@ function drawChart() {
       '<text x="9" y="1.5" fill="#6FA8A3" font-family="IBM Plex Mono,monospace" font-size="9.5" letter-spacing="2">CARD COMMITTED</text></g>';
   }
 
-  chartSvg.innerHTML = g + dots + ghosts + live + stamp;
+  const sweep = '<line id="sweep" x1="0" y1="0" x2="0" y2="0" stroke="#E8E5DE" stroke-width="1" opacity="0"/>';
+  chartSvg.innerHTML = bands + g + dots + ghosts + live + stamp + sweep;
+}
+
+const residSvg = $('resid');
+
+// The residual is what a fit is actually judged on: RMSE compresses it to one
+// number, and structure left in it -- a whole region sitting above zero -- is
+// the part that says which parameter is still wrong.
+function drawResidual() {
+  const box = residSvg.parentElement.getBoundingClientRect();
+  const W = Math.max(box.width, 10), H = Math.max(box.height, 10);
+  residSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+  const exp = view.experimental, last = view.committed ? null : latestEval();
+  const src = view.committed ? view.evals[view.evals.length - 1] : last;
+  if (!exp || !src || !src.predicted_stress_mpa) { residSvg.innerHTML = ''; return; }
+
+  const pred = src.predicted_stress_mpa;
+  const n = Math.min(pred.length, exp.strain.length);
+  let lim = 0;
+  for (let i = 0; i < n; i++) lim = Math.max(lim, Math.abs(pred[i] - exp.stress_mpa[i]));
+  lim = Math.max(niceCeil(lim || 1), 5);
+
+  const T = 18, B = 14;
+  const px = v => PAD.l + (v / Math.max.apply(null, exp.strain)) * (W - PAD.l - PAD.r);
+  const py = v => (T + H - B) / 2 - (v / lim) * ((H - T - B) / 2);
+
+  let g = '';
+  for (const v of [lim, 0, -lim]) {
+    const y = py(v);
+    g += '<line x1="' + PAD.l + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.r).toFixed(1) + '" y2="' + y.toFixed(1) +
+         '" stroke="' + (v === 0 ? '#3A424A' : '#1B1F24') + '" stroke-width="1"/>' +
+         '<text x="' + (PAD.l - 9) + '" y="' + (y + 3).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="8" text-anchor="end">' +
+         (v > 0 ? '+' : '') + v.toFixed(0) + '</text>';
+  }
+
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    d += (i ? 'L' : 'M') + px(exp.strain[i]).toFixed(1) + ' ' + py(pred[i] - exp.stress_mpa[i]).toFixed(1);
+  }
+  const zero = py(0).toFixed(1);
+  const area = d + 'L' + px(exp.strain[n - 1]).toFixed(1) + ' ' + zero + 'L' + px(exp.strain[0]).toFixed(1) + ' ' + zero + 'Z';
+
+  residSvg.innerHTML = g +
+    '<path d="' + area + '" fill="#6FA8A3" opacity="0.13"/>' +
+    '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="1.2"/>';
 }
 
 const polar = (r, deg) => { const a = (deg - 90) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; };
@@ -536,7 +789,10 @@ function drawSpark() {
   // descent instead of collapsing onto the top gridline. Always keeps the pass bar
   // in frame so the number has something to be judged against.
   const vals = view.evals.map(e => e.rmse_pct_of_peak).filter(v => v > 0);
-  const lo = Math.max(0.05, Math.min(PASS_PCT * 0.55, vals.length ? Math.min.apply(null, vals) * 0.75 : 1));
+  // Floor the range below the noise floor so that line stays on screen -- it is
+  // the reference the whole descent is heading toward.
+  const lo = Math.max(0.05, Math.min(NOISE_FLOOR_PCT * 0.8, PASS_PCT * 0.55,
+                                     vals.length ? Math.min.apply(null, vals) * 0.75 : 1));
   const hi = Math.max(PASS_PCT * 1.4, vals.length ? Math.max.apply(null, vals) * 1.3 : 10);
   const lgLo = Math.log10(lo), lgHi = Math.log10(hi);
   const yOf = v => H - B - ((Math.log10(clamp(v, lo, hi)) - lgLo) / (lgHi - lgLo)) * (H - T - B);
@@ -551,6 +807,16 @@ function drawSpark() {
   const ty = yOf(PASS_PCT);
   g += '<line x1="' + L + '" y1="' + ty.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#D9A15B" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"/>' +
        '<text x="' + (W - R).toFixed(1) + '" y="' + (ty - 4).toFixed(1) + '" fill="#D9A15B" font-family="IBM Plex Mono,monospace" font-size="8.5" text-anchor="end" opacity="0.8">PASS 3%</text>';
+
+  // The measurement noise puts a floor under the achievable residual: fitting
+  // below it would be fitting the noise. Worth drawing, so a run that stops
+  // just above it reads as converged rather than as having given up.
+  if (NOISE_FLOOR_PCT >= lo && NOISE_FLOOR_PCT <= hi) {
+    const ny = yOf(NOISE_FLOOR_PCT);
+    g += '<line x1="' + L + '" y1="' + ny.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ny.toFixed(1) +
+         '" stroke="#E8E5DE" stroke-width="1" stroke-dasharray="1 3" opacity="0.35"/>' +
+         '<text x="' + (L + 4) + '" y="' + (ny - 3).toFixed(1) + '" fill="#79838D" font-family="IBM Plex Mono,monospace" font-size="8" opacity="0.75">NOISE FLOOR</text>';
+  }
 
   const n = view.evals.length;
   if (n) {
@@ -636,9 +902,102 @@ function render() {
   else if (st === 'searching') sub = view.evals.length + ' evals · coordinate descent';
   $('banner-sub').textContent = sub;
 
+  drawLog();
+  drawChecks();
+  drawSource();
   drawChart();
+  drawResidual();
   drawGauges();
   drawSpark();
+}
+
+// Mirrors what commit_calibration enforces in server.py, so the panel shows the
+// bar the run is actually being held to rather than a restatement of it.
+function drawChecks() {
+  const p = view.committed ? view.committed.params : (latestEval() || {}).params;
+  const e = latestEval();
+  const rmsePct = view.committed ? view.committed.rmse_pct_of_peak : (e ? e.rmse_pct_of_peak : null);
+  const epsMax = view.experimental ? Math.max.apply(null, view.experimental.strain) : null;
+
+  const rows = [];
+  const add = (state, mark, what) => rows.push({ state, mark, what });
+
+  if (!p) {
+    add('idle', '· · ·', 'Awaiting the first evaluation');
+  } else {
+    const ordered = p.sig_AS_f > p.sig_AS_s && p.sig_AS_s > p.sig_SA_s && p.sig_SA_s > p.sig_SA_f && p.sig_SA_f > 0;
+    add(ordered ? 'pass' : 'fail', ordered ? 'PASS' : 'FAIL',
+        'Hysteresis dissipates energy — <em>σAS_f > σAS_s > σSA_s > σSA_f > 0</em>');
+
+    const epsOk = p.eps_L > 0 && p.eps_L <= 0.15;
+    add(epsOk ? 'pass' : 'fail', epsOk ? 'PASS' : 'FAIL',
+        'Transformation strain within reach — <em>0 < ε_L ≤ 0.15</em>');
+
+    const rg = regimes(p, epsMax || 0.065);
+    const fits = epsMax !== null && rg && epsMax > rg.eps2;
+    add(fits ? 'pass' : 'fail', fits ? 'PASS' : 'FAIL',
+        'Transformation completes inside the test range — <em>ε_max > ε2</em>');
+
+    if (rmsePct === null) add('idle', '· · ·', 'Fit quality not yet measured');
+    else {
+      const ok = rmsePct <= PASS_PCT;
+      add(ok ? 'pass' : 'fail', ok ? 'PASS' : 'FAIL',
+          'Residual under the bar — <em>' + rmsePct.toFixed(2) + '% ≤ ' + PASS_PCT.toFixed(2) + '% of peak</em>');
+    }
+
+    const stiff = p.E_A > p.E_M;
+    add(stiff ? 'pass' : 'warn', stiff ? 'PASS' : 'WARN',
+        'Austenite stiffer than martensite — <em>E_A > E_M</em>' +
+        (stiff ? '' : ' · unusual for NiTi, flagged not blocked'));
+  }
+
+  const signed = !!view.committed;
+  add(signed ? 'pass' : 'idle', signed ? 'PASS' : '· · ·',
+      signed ? 'Justification supplied and human approved'
+             : 'Human approval — held by TrueForge, not observable here');
+
+  $('checks').innerHTML = rows.map(r =>
+    '<li class="' + r.state + '"><span class="mark">' + r.mark + '</span>' +
+    '<span class="what">' + r.what + '</span></li>').join('');
+}
+
+function drawSource() {
+  const exp = view.experimental;
+  const n = exp && exp.strain ? exp.strain.length : 0;
+  const rows = [
+    ['SPECIMEN', 'NiTi · superelastic'],
+    ['PROTOCOL', 'uniaxial load–unload'],
+    ['CYCLES', '1'],
+    ['ε RANGE', n ? '0 → ' + Math.max.apply(null, exp.strain).toFixed(3) + ' → 0' : '—'],
+    ['σ PEAK', n ? Math.max.apply(null, exp.stress_mpa).toFixed(1) + ' MPa' : '—'],
+    ['SAMPLES', n || '—'],
+    ['REVERSAL', n ? '#' + exp.strain.indexOf(Math.max.apply(null, exp.strain)) : '—'],
+    ['ORIGIN', 'synthetic · seeded'],
+    ['NOISE', '3% of σ + 2 MPa'],
+    ['FEED', ':8001/progress'],
+  ];
+  $('srcmeta').innerHTML = rows.map(r =>
+    '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
+}
+
+const LOG_ROWS = 7;
+
+function drawLog() {
+  const hist = view.rawHistory || [];
+  const rows = hist.slice(-LOG_ROWS).reverse().map(e => {
+    const at = Date.parse(e.at_utc || e.committed_at_utc);
+    const t = isNaN(at) ? '--:--:--' : new Date(at).toTimeString().slice(0, 8);
+    if (e.type === 'evaluate') {
+      return ['', t, 'evaluate_model  ' + e.rmse_pct_of_peak.toFixed(2) + '%'];
+    }
+    if (e.type === 'commit_success') {
+      return ['ok', t, 'commit_calibration  signed off'];
+    }
+    return ['bad', t, 'commit rejected  ' + (e.reason || '').slice(0, 26)];
+  });
+  if (!rows.length) rows.push(['', '--:--:--', 'awaiting first tool call']);
+  $('log').innerHTML = rows.map(r =>
+    '<li class="' + r[0] + '"><b>' + r[1] + '</b>' + r[2] + '</li>').join('');
 }
 
 let resizeTimer;
@@ -646,6 +1005,36 @@ addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => { buildWheel(); render(); }, 120);
 });
+
+// The SVGs are drawn in real pixels, so they have to be redrawn whenever their
+// box changes -- not just on window resize. The web fonts land after first
+// paint and reflow the panels, which would otherwise leave the chart drawn to
+// a stale height for the rest of the session.
+if (window.ResizeObserver) {
+  let pending;
+  const ro = new ResizeObserver(() => {
+    clearTimeout(pending);
+    pending = setTimeout(render, 60);
+  });
+  ro.observe(chartSvg.parentElement);
+  ro.observe(residSvg.parentElement);
+  ro.observe(sparkSvg.parentElement);
+}
+
+const TABS = ['trace', 'checks', 'source'];
+
+function showTab(name) {
+  if (!TABS.includes(name)) return;
+  for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.tab === name);
+  for (const t of TABS) $('pane-' + t).classList.toggle('on', t === name);
+}
+
+$('tabs').addEventListener('click', ev => {
+  const btn = ev.target.closest('button[data-tab]');
+  if (btn) { showTab(btn.dataset.tab); location.hash = btn.dataset.tab; }
+});
+addEventListener('hashchange', () => showTab(location.hash.slice(1)));
+if (location.hash) showTab(location.hash.slice(1));
 
 buildWheel();
 buildGauges();
