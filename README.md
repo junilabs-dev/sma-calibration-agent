@@ -24,15 +24,46 @@ you can personally back up.]
 
 ## Qodo Code Review Evidence
 
-<!-- REQUIRED by the hackathon rules (#10) -- fill in once real PRs exist,
-     do not submit with this placeholder still in place.
-- Link to at least one representative merged PR containing real hackathon code
-- 1-2 sentences on what Qodo actually flagged, and what you changed vs. intentionally kept as-is
-- A short note on the PR history: does a later review show the flagged issues addressed?
--->
-- Merged PR: `[link here]`
-- What Qodo surfaced: `[fill in]`
-- What I changed / intentionally dismissed and why: `[fill in]`
+**Merged PR:** [#1 — Live calibration dashboard, local TrueForge harness, and a
+Windows startup fix](https://github.com/junilabs-dev/sma-calibration-agent/pull/1)
+(10 commits, 14 files, +6021/−43)
+
+**What Qodo flagged — four bugs, two of them High:**
+
+| # | Severity | Finding |
+|---|---|---|
+| 1 | High | `scripts/patch-kysely-esm.mjs` inserted the `pathToFileURL` import only when the file began with a `///` reference line |
+| 2 | High | `stop.ps1` matched bare names like `server.py` across every python/node/pwsh process on the machine |
+| 3 | Medium | `server.py` rewrote `progress_state.json` in place while the dashboard polled it |
+| 4 | Medium | `start.ps1` read `TRUEFORGE_PORT` in the child launcher but checked and printed a hardcoded 8790 |
+
+**What I changed — all four fixed, none dismissed** (commit `c541146`):
+
+1. kysely does currently start with that reference line, so the patch worked —
+   but `String.replace` with no match returns its input unchanged, so if that
+   line ever went away the patch would have added a call to an undefined
+   function and failed at migration time with no warning. The import now lands
+   unconditionally, after any leading reference lines.
+2. This was the worst of the four, because the script's own comment claimed
+   unrelated processes were left alone while the code did the opposite. It
+   would have killed another checkout's `server.py`. It now matches the
+   checkout path, which every process started here carries on its command line.
+3. A poll landing mid-write read a half-written file and reported `NO SIGNAL`
+   on a healthy run — the kind of fault that only shows up while being
+   demonstrated. The write goes through a temp file and an atomic rename, and
+   the dashboard holds its last good state until three consecutive failures.
+4. A custom port started fine and then failed its own health check for 75
+   seconds. The resolved port now flows through the check, the URL and the
+   browser launch.
+
+**Verification, rather than assertion:** the patch was re-tested against a
+kysely file with the reference line deliberately removed; 150 writes against
+three concurrent pollers produced zero corrupt reads; and `TRUEFORGE_PORT=8795`
+now reports `[ok]`.
+
+**PR history:** Qodo's first pass raised the four findings above. After
+`c541146` its follow-up review reports **Bugs (0)** with all four marked
+Resolved, and the PR moved to *Ready to merge*.
 
 **The three things this hits, explicitly:**
 1. **Reaches a real tool** — a custom MCP server (`server.py`) exposing the
@@ -42,9 +73,11 @@ you can personally back up.]
    directly.
 3. **Stops before anything irreversible** — `commit_calibration` is annotated
    `destructiveHint: true` and is where the finalized parameters get written.
-   It should sit behind TrueForge's approval gate; **verify this against
-   TrueForge's current approvals docs at setup time** (see Known gaps below —
-   this is the one piece I couldn't 100% confirm before the deadline).
+   It sits behind TrueForge's approval gate: `require_approval_for_tools`
+   defaults to `["@write", "@destructive"]`, so the annotation is what the gate
+   keys off. The harness emits `tool.approval_required` and blocks until a
+   `user.tool_approval` decision is posted back — `run_agent.py` handles that
+   from the terminal, and `--deny` shows the gate refusing.
 
 ## Why a surrogate model, not real Abaqus
 
@@ -191,11 +224,17 @@ data and commit the result once you're confident in it."* Then watch it call
   listener opens. Verified against trueforge 0.1.4 *and* 0.2.0-rc.0, on both C:
   and D: — it is Windows-wide, not specific to this checkout. Remove the script
   once kysely ships the fix.
-- **Approval-gate wiring is annotation-based, unverified against a live
-  TrueForge run.** `commit_calibration` is marked `destructiveHint: true`
-  per the MCP spec — confirm TrueForge's approvals actually key off that
-  annotation on your installed version, or whether tools need to be listed
-  explicitly somewhere in the harness config.
+- **Approval-gate wiring: resolved.** This was the open question. TrueForge's
+  own schema settles it — an agent's MCP server entry carries
+  `require_approval_for_tools`, defaulting to `["@write", "@destructive"]`, and
+  `commit_calibration` is annotated `destructiveHint: true`, so it matches
+  `@destructive` without any extra configuration. `run_agent.py` sets the
+  selector explicitly regardless, since a default that changes quietly is a
+  poor thing for a safety gate to rest on. When the gate fires the harness
+  emits `tool.approval_required` and stops until a `user.tool_approval` item is
+  posted back; `run_agent.py --deny` demonstrates it refusing.
+  Still outstanding: this is confirmed from the schema and the wiring, but has
+  not yet been exercised end-to-end against a live model.
 - No blog post / social posts / custom UI. Bundled TrueForge chat UI is used
   as-is.
 
