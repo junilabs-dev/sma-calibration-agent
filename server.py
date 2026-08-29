@@ -57,7 +57,13 @@ def _write_progress(event: dict) -> None:
         except json.JSONDecodeError:
             pass
     state.setdefault("history", []).append(event)
-    _PROGRESS_PATH.write_text(json.dumps(state))
+    # Written via a temp file and renamed: the dashboard polls this path about
+    # once a second, and a plain write_text leaves a window where it reads a
+    # half-written file. Path.replace is atomic, so a reader sees either the old
+    # state or the new one.
+    tmp = _PROGRESS_PATH.with_name(_PROGRESS_PATH.name + ".tmp")
+    tmp.write_text(json.dumps(state))
+    tmp.replace(_PROGRESS_PATH)
 
 # Fit-quality bar a calibration must clear before commit_calibration will accept it.
 _RMSE_PASS_PCT_OF_PEAK = 3.0  # RMSE must be under 3% of peak stress

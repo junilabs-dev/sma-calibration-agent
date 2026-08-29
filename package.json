@@ -1,0 +1,17 @@
+{
+  "name": "sma-calibration-harness",
+  "version": "0.1.0",
+  "description": "Local TrueForge harness for the SMA calibration agent (project-scoped, nothing global).",
+  "main": "index.js",
+  "scripts": {
+    "postinstall": "node scripts/patch-kysely-esm.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@truefoundry/trueforge": "^0.1.4"
+  },
+  "private": true
+}
