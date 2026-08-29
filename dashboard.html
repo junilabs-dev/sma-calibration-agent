@@ -3,370 +3,531 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SMA Calibration · live</title>
+<title>NEUTRINO · Inverse Solver Workstation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0A0C0E;
-  --panel:#15181C;
-  --ink:#E8E5DE;
-  --teal:#6FA8A3;
-  --amber:#D9A15B;
-  --rust:#B5563C;
-  --rule:#232830;
-  --rule-soft:#1B1F24;
-  --muted:#79838D;
-  --dim:#4E565E;
-  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --bg:#081018;
+  --s1:#0D1720;
+  --s2:#101C26;
+  --s3:#131F29;
+  --line:#1B2A36;
+  --line-soft:#152430;
+  --ink:#DCE7EE;
+  --muted:#7E93A2;
+  --dim:#4A5C6A;
+  --accent:#65D6D3;
+  --accent-dim:#4FBCC0;
+  --good:#5FCFA8;
+  --warn:#D9A15B;
+  --bad:#D2705A;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{
-  background:var(--bg);
-  color:var(--ink);
-  font-family:var(--sans);
-  font-size:13px;
-  overflow:hidden;
-  -webkit-font-smoothing:antialiased;
+  background:var(--bg);color:var(--ink);
+  font-family:var(--sans);font-size:13px;
+  overflow:hidden;-webkit-font-smoothing:antialiased;
 }
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer}
 
-.wheel{position:fixed;inset:0;z-index:0;pointer-events:none}
-#wheel-spin{transform-origin:0 0}
-
-.frame{
-  position:relative;z-index:1;
-  height:100vh;
-  display:grid;
-  grid-template-rows:40px 1fr 212px;
-  gap:9px;
-  padding:9px;
+.app{
+  height:100vh;display:grid;
+  grid-template-columns:212px 1fr 344px;
+  grid-template-rows:58px 1fr 26px;
+  grid-template-areas:"top top top" "nav main side" "bar bar bar";
 }
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 4px 0 2px;border-bottom:1px solid var(--rule)}
-.brand{display:flex;align-items:baseline;gap:11px;min-width:0}
-.brand h1{font-size:13px;font-weight:600;letter-spacing:.17em}
-.brand .sub{font-size:10.5px;color:var(--muted);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.topmeta{display:flex;align-items:center;gap:22px;flex:none}
-.meta{display:flex;align-items:baseline;gap:6px}
-.meta b{font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:.02em}
-.meta span{font-size:9.5px;color:var(--dim);letter-spacing:.14em}
-.link{display:flex;align-items:center;gap:7px;font-size:9.5px;letter-spacing:.14em;color:var(--muted)}
-.link i{width:6px;height:6px;border-radius:50%;background:var(--dim);display:block}
-.link.on i{background:var(--teal);box-shadow:0 0 0 3px rgba(111,168,163,.13)}
-.link.on{color:var(--teal)}
-.link.off i{background:var(--rust)}
-.link.off{color:var(--rust)}
-
-.stage{display:grid;grid-template-columns:1fr 338px;gap:9px;min-height:0}
-.rack{display:grid;grid-template-columns:1fr 338px;gap:9px;min-height:0}
-.panel{
-  position:relative;
-  background:var(--panel);
-  border:1px solid var(--rule);
-  display:flex;flex-direction:column;min-width:0;min-height:0;
+/* ---------- top command bar ---------- */
+.top{
+  grid-area:top;display:flex;align-items:center;gap:26px;
+  padding:0 16px;background:var(--s1);border-bottom:1px solid var(--line);
 }
-.panel::before,.panel::after{
-  content:'';position:absolute;width:7px;height:7px;pointer-events:none;
-  border-color:var(--dim);opacity:.55;
-}
-.panel::before{top:-1px;left:-1px;border-top:1px solid;border-left:1px solid}
-.panel::after{bottom:-1px;right:-1px;border-bottom:1px solid;border-right:1px solid}
-.phead{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:8px 11px 7px;border-bottom:1px solid var(--rule-soft);flex:none;
-}
-.phead h2{font-size:9.5px;font-weight:600;letter-spacing:.19em;color:var(--muted)}
-.phead .note{font-family:var(--mono);font-size:9.5px;color:var(--dim);letter-spacing:.06em}
-.pbody{flex:1;min-height:0;position:relative}
-.pbody svg{display:block;width:100%;height:100%}
+.logo{display:flex;align-items:center;gap:11px;width:196px;flex:none}
+.logo svg{flex:none}
+.logo h1{font-size:14px;font-weight:600;letter-spacing:.22em;line-height:1.1}
+.logo p{font-size:9.5px;color:var(--muted);letter-spacing:.06em;margin-top:2px}
 
-/* chart column: response on top, residual strip beneath a hairline */
-.chartstack{flex:1;min-height:0;display:flex;flex-direction:column}
-.chartstack .main{flex:1;min-height:0;position:relative}
-.chartstack .resid{
-  flex:none;height:92px;position:relative;
-  border-top:1px solid var(--rule);
+.selects{display:flex;gap:16px;flex:1;min-width:0}
+.sel{min-width:0}
+.sel span{display:block;font-size:8.5px;letter-spacing:.16em;color:var(--dim);margin-bottom:4px}
+.sel div{
+  font-family:var(--mono);font-size:11.5px;color:var(--ink);
+  background:var(--s3);border:1px solid var(--line);
+  padding:6px 10px;min-width:150px;
+  display:flex;justify-content:space-between;gap:10px;align-items:center;
 }
-.residlabel{
-  position:absolute;top:5px;left:11px;z-index:1;pointer-events:none;
-  font-size:9px;letter-spacing:.17em;color:var(--dim);
+.sel div i{color:var(--dim);font-style:normal;font-size:9px}
+
+.topright{display:flex;align-items:center;gap:16px;flex:none}
+.iconbtn{
+  width:26px;height:26px;display:grid;place-items:center;
+  background:none;border:1px solid transparent;color:var(--dim);
 }
-.chartstack svg{display:block;width:100%;height:100%}
-
-.legend{display:flex;gap:14px;font-size:9.5px;letter-spacing:.09em;color:var(--dim)}
-.legend span{display:flex;align-items:center;gap:5px}
-.legend i{width:13px;height:0;display:block;border-top:1.5px solid}
-.legend i.dots{border-top:1.5px dotted var(--muted)}
-.legend i.pred{border-top-color:var(--teal)}
-.legend i.ghost{border-top:1.5px solid rgba(111,168,163,.28)}
-
-.wheelcol{display:flex;flex-direction:column;justify-content:center;padding:0 4px 0 16px;min-width:0}
-.hlabel{font-size:9.5px;letter-spacing:.19em;color:var(--muted);display:block}
-.hval{
-  font-family:var(--mono);font-weight:500;
-  font-size:clamp(46px,7.4vh,72px);line-height:.94;letter-spacing:-.028em;
-  display:block;margin-top:9px;color:var(--ink);
-  font-variant-numeric:tabular-nums;
+.iconbtn:hover{color:var(--muted);border-color:var(--line)}
+.runbtn{
+  display:flex;align-items:center;gap:8px;
+  background:var(--accent);color:#06222A;border:0;
+  padding:8px 15px;font-size:11px;font-weight:600;letter-spacing:.13em;
 }
-.hval.stale{color:var(--dim)}
-.hval small{font-size:.34em;letter-spacing:.02em;margin-left:.14em;color:var(--muted)}
-.hdelta{font-family:var(--mono);font-size:11.5px;display:block;margin-top:9px;color:var(--dim);letter-spacing:.02em}
-.hdelta.down{color:var(--teal)}
-.hdelta.up{color:var(--amber)}
-.hrule{height:1px;background:var(--rule);margin:15px 0 12px;max-width:210px}
-.hgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 14px;max-width:230px}
-.hcell span{font-size:9px;letter-spacing:.14em;color:var(--dim);display:block}
-.hcell b{font-family:var(--mono);font-size:12.5px;font-weight:500;display:block;margin-top:3px}
+.runbtn:hover{background:#7CE2DF}
+.runbtn:disabled{background:var(--s3);color:var(--dim);cursor:default}
 
-.tabs{display:flex;gap:0;margin:2px 0 0;border-bottom:1px solid var(--rule)}
-.tabs button{
-  appearance:none;background:none;border:0;cursor:pointer;
-  padding:6px 11px 6px 0;margin-right:13px;
-  font-family:var(--sans);font-size:9.5px;letter-spacing:.17em;color:var(--dim);
-  border-bottom:1px solid transparent;margin-bottom:-1px;
+/* ---------- left rail ---------- */
+.nav{
+  grid-area:nav;background:var(--s1);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
 }
-.tabs button:hover{color:var(--muted)}
-.tabs button.on{color:var(--teal);border-bottom-color:var(--teal)}
-
-.pane{display:none;padding-top:11px;min-height:0}
-.pane.on{display:block}
-.panenote{font-size:9.5px;line-height:1.5;color:var(--dim);margin-bottom:10px;max-width:280px}
-
-.kv{border-collapse:collapse;width:100%;max-width:280px}
-.kv td{padding:2.5px 0;font-size:9.5px;letter-spacing:.11em;color:var(--dim);white-space:nowrap}
-.kv td:last-child{
-  font-family:var(--mono);font-size:11.5px;letter-spacing:.01em;
-  color:var(--ink);text-align:right;font-variant-numeric:tabular-nums;
+.navscroll{flex:1;min-height:0;overflow:auto;padding:14px 10px}
+.navtitle{font-size:8.5px;letter-spacing:.19em;color:var(--dim);padding:0 8px;margin:0 0 8px}
+.navtitle.later{margin-top:20px}
+.navitem{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:8px 9px;margin-bottom:1px;background:none;border:0;
+  border-left:2px solid transparent;
+  color:var(--muted);font-size:12px;text-align:left;
 }
-.kv td.warn:last-child{color:var(--amber)}
+.navitem:hover{color:var(--ink);background:var(--s2)}
+.navitem.on{color:var(--accent);background:rgba(101,214,211,.07);border-left-color:var(--accent)}
+.navitem svg{flex:none;opacity:.85}
+.navitem.off{color:var(--dim);cursor:not-allowed}
+.navitem.off:hover{background:none;color:var(--dim)}
 
-.checks{list-style:none;max-width:288px}
-.checks li{display:flex;gap:8px;align-items:baseline;padding:4.5px 0;border-bottom:1px solid var(--rule-soft)}
+.engine{margin:10px;padding:12px;background:var(--s2);border:1px solid var(--line)}
+.engine h4{font-size:10px;letter-spacing:.17em;font-weight:600}
+.engine .ver{font-family:var(--mono);font-size:9.5px;color:var(--accent);margin-top:3px}
+.engine .desc{font-size:9.5px;color:var(--dim);margin-top:1px}
+.engine svg{display:block;width:100%;height:64px;margin:8px 0 4px}
+.engine .stat{display:flex;align-items:center;gap:7px;font-size:9.5px;color:var(--muted);padding-top:8px;border-top:1px solid var(--line-soft)}
+.engine .stat i{width:6px;height:6px;border-radius:50%;background:var(--good);display:block}
+.engine .stat.down i{background:var(--bad)}
+
+/* ---------- centre ---------- */
+.main{grid-area:main;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.wstabs{display:flex;gap:0;padding:0 16px;background:var(--s1);border-bottom:1px solid var(--line);flex:none}
+.wstabs button{
+  background:none;border:0;padding:11px 0;margin-right:26px;
+  font-size:10.5px;letter-spacing:.13em;color:var(--muted);
+  border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.wstabs button:hover{color:var(--ink)}
+.wstabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+.wsbody{flex:1;min-height:0;overflow:auto;padding:12px 16px 16px}
+.card{background:var(--s1);border:1px solid var(--line);margin-bottom:12px}
+.card:last-child{margin-bottom:0}
+.chead{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 13px;border-bottom:1px solid var(--line-soft);
+}
+.chead h3{font-size:10px;letter-spacing:.15em;color:var(--ink);font-weight:600}
+.chead .tools{display:flex;align-items:center;gap:8px}
+.pill{
+  background:var(--s3);border:1px solid var(--line);color:var(--muted);
+  font-size:9.5px;letter-spacing:.08em;padding:4px 9px;
+}
+.pill:hover{color:var(--ink)}
+.legend{display:flex;gap:15px;font-size:9.5px;color:var(--muted);align-items:center}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{display:block;width:14px;height:0;border-top:2px solid var(--accent)}
+.legend i.dot{border:0;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.legend i.prior{border-top:2px dashed var(--dim)}
+
+.plot{position:relative}
+.plot svg{display:block;width:100%}
+#chart{height:330px}
+#resid{height:104px}
+#sens{height:260px}
+#errm{height:260px}
+
+.pvgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:9px;padding:12px 13px}
+.pcard{background:var(--s2);border:1px solid var(--line);padding:11px 6px 9px;text-align:center;min-width:0}
+.pcard .sym{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.pcard .desc{font-size:8.5px;color:var(--dim);margin-top:2px;line-height:1.25;min-height:21px}
+.pcard svg{width:100%;max-width:82px;height:auto;margin:2px auto 0;display:block}
+.pcard .val{font-family:var(--mono);font-size:14px;font-variant-numeric:tabular-nums;margin-top:1px}
+.pcard .unit{font-size:8.5px;color:var(--dim);letter-spacing:.1em}
+.pcard.oor .val{color:var(--warn)}
+
+.logtab{width:100%;border-collapse:collapse;font-size:11px}
+.logtab th{
+  text-align:left;font-size:8.5px;letter-spacing:.15em;color:var(--dim);font-weight:500;
+  padding:7px 13px;border-bottom:1px solid var(--line-soft);
+}
+.logtab td{padding:6px 13px;border-bottom:1px solid var(--line-soft);color:var(--muted);vertical-align:top}
+.logtab tr:last-child td{border-bottom:0}
+.logtab td.t{font-family:var(--mono);color:var(--dim);width:78px;white-space:nowrap}
+.logtab td.ev{color:var(--ink);width:150px;white-space:nowrap}
+.logtab tr.ok td.ev{color:var(--good)}
+.logtab tr.bad td.ev{color:var(--bad)}
+.logwrap{max-height:184px;overflow:auto}
+
+/* ---------- right panel ---------- */
+.side{
+  grid-area:side;background:var(--s1);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;overflow:auto;
+}
+.sec{padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+.sechead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sechead h3{font-size:10px;letter-spacing:.15em;color:var(--ink);font-weight:600}
+.live{display:flex;align-items:center;gap:6px;font-size:9px;letter-spacing:.13em;color:var(--good)}
+.live i{width:6px;height:6px;border-radius:50%;background:var(--good);display:block;animation:pulse 2.2s ease-in-out infinite}
+.live.off{color:var(--bad)} .live.off i{background:var(--bad);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.fitrow{display:flex;align-items:flex-start;gap:10px}
+.fitleft{flex:1;min-width:0}
+.fitlabel{font-size:8.5px;letter-spacing:.15em;color:var(--dim)}
+.fitval{
+  font-family:var(--mono);font-size:40px;font-weight:500;line-height:1;
+  letter-spacing:-.02em;color:var(--accent);margin-top:7px;font-variant-numeric:tabular-nums;
+}
+.fitval small{font-size:.4em;color:var(--muted);margin-left:.12em}
+.fitval.stale{color:var(--dim)}
+.fitdelta{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-top:7px}
+.fitdelta.down{color:var(--good)} .fitdelta.up{color:var(--warn)}
+#particles{width:126px;height:106px;flex:none}
+
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:11px 12px;margin-top:14px}
+.mgrid span{display:block;font-size:8.5px;letter-spacing:.14em;color:var(--dim)}
+.mgrid b{display:block;font-family:var(--mono);font-size:12.5px;font-weight:500;margin-top:3px}
+
+.kv{width:100%;border-collapse:collapse}
+.kv td{padding:3px 0;font-size:9.5px;letter-spacing:.1em;color:var(--dim);white-space:nowrap}
+.kv td:last-child{font-family:var(--mono);font-size:11px;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.kv td.warn:last-child{color:var(--warn)}
+
+#conv{width:100%;height:118px;display:block}
+
+.sgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.scell{background:var(--s2);border:1px solid var(--line);padding:8px 9px}
+.scell span{display:block;font-size:8px;letter-spacing:.14em;color:var(--dim)}
+.scell b{display:block;font-family:var(--mono);font-size:12px;font-weight:500;margin-top:4px}
+.scell b.run{color:var(--accent)}
+.scell b.done{color:var(--good)}
+.scell b.hold{color:var(--warn)}
+
+.checks{list-style:none}
+.checks li{display:flex;gap:9px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line-soft)}
 .checks li:last-child{border-bottom:0}
-.checks .mark{font-family:var(--mono);font-size:10px;flex:none;width:26px;letter-spacing:.04em}
-.checks .what{font-size:9.5px;line-height:1.4;color:var(--muted);flex:1}
-.checks .what em{font-style:normal;font-family:var(--mono);color:var(--dim)}
-.checks li.pass .mark{color:var(--teal)}
-.checks li.fail .mark{color:var(--rust)}
-.checks li.fail .what{color:var(--ink)}
-.checks li.warn .mark{color:var(--amber)}
-.checks li.idle .mark{color:var(--dim)}
+.checks .mk{font-family:var(--mono);font-size:9.5px;width:30px;flex:none}
+.checks .wt{font-size:9.5px;line-height:1.45;color:var(--muted);flex:1}
+.checks .wt em{font-style:normal;font-family:var(--mono);color:var(--dim)}
+.checks li.pass .mk{color:var(--good)}
+.checks li.fail .mk{color:var(--bad)}
+.checks li.warn .mk{color:var(--warn)}
+.checks li.idle .mk{color:var(--dim)}
 
-.rawtab{border-collapse:collapse;width:100%;max-width:288px;font-family:var(--mono);font-size:10px}
-.rawtab td{padding:2px 0;font-variant-numeric:tabular-nums;color:var(--muted);text-align:right}
-.rawtab td:first-child{text-align:left;color:var(--dim)}
-.rawtab tr.at td{color:var(--teal)}
-.rawtab tr.hd td{color:var(--dim);font-size:8.5px;letter-spacing:.12em;padding-bottom:4px}
+.note{font-size:9.5px;line-height:1.5;color:var(--dim);margin-top:9px}
+.note b{color:var(--muted);font-weight:500}
 
-.log{list-style:none;margin-top:8px;max-width:270px;font-family:var(--mono);font-size:9.5px;line-height:1.65}
-.log li{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.log li b{color:var(--dim);font-weight:400;margin-right:7px}
-.log li.ok{color:var(--teal)}
-.log li.bad{color:var(--rust)}
-.log li:first-child{color:var(--ink)}
-
-.gaugerow{flex:1;display:grid;grid-template-columns:repeat(7,1fr);min-height:0;align-items:stretch}
-.gauge{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:2px;padding:5px 2px 7px;min-width:0;border-right:1px solid var(--rule-soft);
+/* ---------- bottom bar ---------- */
+.bar{
+  grid-area:bar;display:flex;align-items:center;gap:0;
+  background:var(--s1);border-top:1px solid var(--line);
+  padding:0 14px;font-size:9.5px;color:var(--dim);overflow:hidden;
 }
-.gauge:last-child{border-right:0}
-.gauge .gname{font-family:var(--mono);font-size:10.5px;letter-spacing:.03em}
-.gauge .gdesc{font-size:8.5px;letter-spacing:.09em;color:var(--dim);text-align:center;line-height:1.25}
-.gauge svg{width:100%;max-width:96px;height:auto;flex:none}
-.gauge .gval{font-family:var(--mono);font-size:13px;font-weight:500;font-variant-numeric:tabular-nums}
-.gauge .gunit{font-size:8.5px;color:var(--dim);letter-spacing:.1em}
-.gauge.oor .gval{color:var(--amber)}
+.bar span{white-space:nowrap;padding-right:15px;margin-right:15px;border-right:1px solid var(--line-soft)}
+.bar span:last-child{border-right:0;margin-left:auto;padding-right:0;margin-right:0}
+.bar b{color:var(--muted);font-weight:400;font-family:var(--mono)}
+.bar .sync{display:flex;align-items:center;gap:6px;color:var(--good)}
+.bar .sync i{width:6px;height:6px;border-radius:50%;background:var(--good);display:block}
+.bar .sync.off{color:var(--bad)} .bar .sync.off i{background:var(--bad)}
 
-.trend .pbody{flex:none;height:74px;padding:2px 4px 0}
-.banner{
-  flex:none;display:flex;align-items:center;gap:9px;
-  padding:8px 11px;border-top:1px solid var(--rule-soft);
-  border-left:2px solid var(--dim);margin-top:auto;
+.approval{
+  background:rgba(217,161,91,.06);
+  border-bottom:1px solid rgba(217,161,91,.3);
+  box-shadow:inset 2px 0 0 var(--warn);
 }
-.banner i{width:7px;height:7px;flex:none;border-radius:50%;background:var(--dim)}
-.banner .btext{font-size:10.5px;letter-spacing:.13em;font-weight:500;color:var(--muted)}
-.banner .bsub{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:auto;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.banner.searching{border-left-color:var(--teal)}
-.banner.searching i{background:var(--teal)}
-.banner.searching .btext{color:var(--teal)}
-.banner.inferred{border-left-color:var(--amber)}
-.banner.inferred i{background:var(--amber);animation:pulse 1.9s ease-in-out infinite}
-.banner.inferred .btext{color:var(--amber)}
-.banner.rejected{border-left-color:var(--rust)}
-.banner.rejected i{background:var(--rust)}
-.banner.rejected .btext{color:var(--rust)}
-.banner.committed{border-left-color:var(--teal)}
-.banner.committed i{background:var(--teal);box-shadow:0 0 0 3px rgba(111,168,163,.14)}
-.banner.committed .btext{color:var(--ink)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.32}}
-.caption{
-  flex:none;padding:7px 11px 8px;font-size:9.5px;line-height:1.45;color:var(--dim);
-  border-top:1px solid var(--rule-soft);
+.apbtns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.apbtns button{
+  padding:9px 0;border:1px solid var(--line);background:var(--s3);
+  color:var(--muted);font-size:10.5px;font-weight:600;letter-spacing:.13em;
 }
-.caption b{color:var(--muted);font-weight:500}
+.apbtns .allow{background:var(--good);border-color:var(--good);color:#052018}
+.apbtns .allow:hover{background:#74DDB8}
+.apbtns .deny{border-color:rgba(210,112,90,.5);color:var(--bad)}
+.apbtns .deny:hover{background:rgba(210,112,90,.12)}
+.apbtns button:disabled{opacity:.5;cursor:default}
+
+.hidden{display:none !important}
 </style>
 </head>
 <body>
 
-<svg class="wheel" id="wheel" aria-hidden="true"></svg>
+<div class="app">
 
-<div class="frame">
-  <header class="topbar">
-    <div class="brand">
-      <h1>SMA CALIBRATION</h1>
-      <span class="sub">superelastic NiTi · 7-parameter inverse identification · single load–unload cycle</span>
+  <!-- ================= top ================= -->
+  <header class="top">
+    <div class="logo">
+      <svg width="30" height="24" viewBox="0 0 30 24" fill="none" aria-hidden="true">
+        <path d="M1 12 C 6 2, 10 2, 15 12 S 24 22, 29 12" stroke="#65D6D3" stroke-width="1.6" fill="none"/>
+        <path d="M1 16 C 6 8, 10 8, 15 16 S 24 24, 29 16" stroke="#65D6D3" stroke-width="1" fill="none" opacity="0.4"/>
+        <circle cx="15" cy="12" r="2.1" fill="#65D6D3"/>
+      </svg>
+      <div>
+        <h1>NEUTRINO</h1>
+        <p>Inverse Solver Workstation</p>
+      </div>
     </div>
-    <div class="topmeta">
-      <div class="meta"><b id="m-iter">—</b><span>EVAL</span></div>
-      <div class="meta"><b id="m-elapsed">—:—</b><span>ELAPSED</span></div>
-      <div class="link" id="link"><i></i><span id="link-text">CONNECTING</span></div>
+
+    <div class="selects">
+      <div class="sel"><span>PROJECT</span><div>SMA_CALIBRATION<i>local</i></div></div>
+      <div class="sel"><span>MODEL</span><div id="sel-model">—<i>gemini</i></div></div>
+      <div class="sel"><span>SOLVER</span><div>Inverse Identification<i>MCP</i></div></div>
+    </div>
+
+    <div class="topright">
+      <div class="live" id="live"><i></i><span id="live-text">CONNECTING</span></div>
+      <button class="runbtn" id="run" title="Runs run_agent.py through TrueForge">▶ RUN SOLVER</button>
     </div>
   </header>
 
-  <main class="stage">
-    <section class="panel">
-      <div class="phead">
-        <h2>STRESS–STRAIN RESPONSE</h2>
-        <div class="legend">
-          <span><i class="dots"></i>measured</span>
-          <span><i class="ghost"></i>prior</span>
-          <span><i class="pred"></i>model</span>
+  <!-- ================= left rail ================= -->
+  <nav class="nav">
+    <div class="navscroll">
+      <p class="navtitle">WORKSPACE</p>
+      <button class="navitem on" data-view="dashboard">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" stroke="currentColor"/><rect x="8" y="1" width="5" height="5" stroke="currentColor"/><rect x="1" y="8" width="5" height="5" stroke="currentColor"/><rect x="8" y="8" width="5" height="5" stroke="currentColor"/></svg>
+        Dashboard</button>
+      <button class="navitem" data-view="parameters">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="4" cy="4" r="2.2" stroke="currentColor"/><circle cx="10" cy="10" r="2.2" stroke="currentColor"/><path d="M4 6.2V12M10 7.8V2" stroke="currentColor"/></svg>
+        Parameters</button>
+      <button class="navitem" data-view="experiments">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 1v4L2 12h10L9 5V1M4 1h6" stroke="currentColor"/></svg>
+        Experiments</button>
+      <button class="navitem" data-view="solver">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.4" stroke="currentColor"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M11.2 2.8L9.8 4.2M4.2 9.8l-1.4 1.4" stroke="currentColor"/></svg>
+        Solver</button>
+      <button class="navitem" data-view="results">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 12h12M3 12V7M6.5 12V3M10 12V5" stroke="currentColor"/></svg>
+        Results</button>
+
+      <p class="navtitle later">UTILITIES</p>
+      <button class="navitem" data-view="console">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4l3 3-3 3M7.5 10.5h4" stroke="currentColor"/><rect x="1" y="1.5" width="12" height="11" stroke="currentColor"/></svg>
+        Script Console</button>
+    </div>
+
+    <div class="engine">
+      <h4>NEUTRINO ENGINE</h4>
+      <div class="ver" id="eng-ver">v0.1.0</div>
+      <div class="desc">Inverse Solver Core</div>
+      <svg id="engineviz" viewBox="0 0 170 64" aria-hidden="true"></svg>
+      <div class="stat" id="eng-stat"><i></i><span>All Systems Operational</span></div>
+    </div>
+  </nav>
+
+  <!-- ================= centre ================= -->
+  <main class="main">
+    <div class="wstabs" id="wstabs">
+      <button class="on" data-tab="response">STRESS–STRAIN RESPONSE</button>
+      <button data-tab="residuals">RESIDUALS</button>
+      <button data-tab="metrics">ERROR METRICS</button>
+      <button data-tab="sensitivity">SENSITIVITY</button>
+      <button data-tab="convergence">CONVERGENCE</button>
+    </div>
+
+    <div class="wsbody" id="wsbody">
+
+      <!-- response -->
+      <section class="card" data-pane="response">
+        <div class="chead">
+          <h3>STRESS–STRAIN RESPONSE</h3>
+          <div class="legend">
+            <span><i class="dot"></i>Measured</span>
+            <span><i></i>Model</span>
+            <span><i class="prior"></i>Prior</span>
+          </div>
         </div>
-      </div>
-      <div class="chartstack">
-        <div class="main"><svg id="chart"></svg></div>
-        <div class="resid">
-          <span class="residlabel">RESIDUAL · MODEL − MEASURED · MPa</span>
-          <svg id="resid"></svg>
+        <div class="plot"><svg id="chart"></svg></div>
+      </section>
+
+      <section class="card" data-pane="response residuals">
+        <div class="chead">
+          <h3>RESIDUAL PLOT (MODEL − MEASURED)</h3>
+          <span class="pill" id="residscale">Auto Scale</span>
         </div>
-      </div>
-    </section>
+        <div class="plot"><svg id="resid"></svg></div>
+      </section>
 
-    <aside class="wheelcol">
-      <span class="hlabel">RMSE · % OF PEAK</span>
-      <span class="hval stale" id="h-rmse">——<small>%</small></span>
-      <span class="hdelta" id="h-delta">awaiting first evaluation</span>
-      <div class="hrule"></div>
-      <div class="hgrid">
-        <div class="hcell"><span>RMSE ABS</span><b id="h-abs">—</b></div>
-        <div class="hcell"><span>PASS BAR</span><b id="h-bar">3.00 %</b></div>
-        <div class="hcell"><span>PEAK σ</span><b id="h-peak">—</b></div>
-        <div class="hcell"><span>POINTS</span><b id="h-pts">—</b></div>
-      </div>
+      <!-- error metrics -->
+      <section class="card hidden" data-pane="metrics">
+        <div class="chead"><h3>ERROR DISTRIBUTION BY REGIME</h3><span class="pill">signed mean · MPa</span></div>
+        <div class="plot"><svg id="errm"></svg></div>
+      </section>
 
-      <div class="hrule"></div>
+      <!-- sensitivity -->
+      <section class="card hidden" data-pane="sensitivity">
+        <div class="chead">
+          <h3>PARAMETER SENSITIVITY</h3>
+          <span class="pill">Δ RMSE for a +12% perturbation</span>
+        </div>
+        <div class="plot"><svg id="sens"></svg></div>
+      </section>
 
-      <nav class="tabs" id="tabs">
-        <button data-tab="trace" class="on">TRACE</button>
-        <button data-tab="checks">CHECKS</button>
-        <button data-tab="source">SOURCE</button>
-      </nav>
+      <!-- parameter vector -->
+      <section class="card" data-pane="response parameters">
+        <div class="chead">
+          <h3>PARAMETER VECTOR</h3>
+          <span class="pill">arc = position within typical NiTi range</span>
+        </div>
+        <div class="pvgrid" id="pv"></div>
+      </section>
 
-      <div class="pane on" id="pane-trace">
-        <table class="kv">
-          <tr><td>STRAIN ε</td><td id="c-eps">—</td></tr>
-          <tr><td>σ MEASURED</td><td id="c-meas">—</td></tr>
-          <tr><td>σ MODEL</td><td id="c-model">—</td></tr>
-          <tr><td>Δ RESIDUAL</td><td id="c-res">—</td></tr>
-          <tr><td>REGIME</td><td id="c-reg">—</td></tr>
-        </table>
-        <span class="hlabel" style="margin-top:14px;display:block">ACTIVITY</span>
-        <ul class="log" id="log"></ul>
-      </div>
+      <!-- activity -->
+      <section class="card" data-pane="response console">
+        <div class="chead"><h3>ACTIVITY LOG</h3><span class="pill" id="logcount">—</span></div>
+        <div class="logwrap">
+          <table class="logtab">
+            <thead><tr><th>TIME</th><th>EVENT</th><th>DETAILS</th></tr></thead>
+            <tbody id="logbody"></tbody>
+          </table>
+        </div>
+      </section>
 
-      <div class="pane" id="pane-checks">
-        <p class="panenote">Gate applied by <span class="mono">commit_calibration</span>
-           before it writes. Evaluated live against the current parameters.</p>
-        <ul class="checks" id="checks"></ul>
-      </div>
+      <!-- experiments -->
+      <section class="card hidden" data-pane="experiments">
+        <div class="chead"><h3>EXPERIMENTAL DATASET</h3><span class="pill" id="ds-name">—</span></div>
+        <div style="padding:12px 13px;display:grid;grid-template-columns:1fr 1fr;gap:22px">
+          <table class="kv" id="srcmeta"></table>
+          <table class="kv" id="rawtab"></table>
+        </div>
+      </section>
 
-      <div class="pane" id="pane-source">
-        <table class="kv" id="srcmeta"></table>
-        <span class="hlabel" style="margin-top:13px;display:block">TRACE · AT CURSOR</span>
-        <table class="rawtab" id="rawtab"></table>
-      </div>
-    </aside>
+      <!-- solver / checks -->
+      <section class="card hidden" data-pane="solver">
+        <div class="chead"><h3>ACCEPTANCE CRITERIA</h3><span class="pill">enforced by commit_calibration</span></div>
+        <div style="padding:11px 13px">
+          <ul class="checks" id="checks"></ul>
+          <p class="note"><b>Applied before the write, not after.</b> These are the conditions
+          <span class="mono">commit_calibration</span> re-checks itself; a run that fails any of them is
+          refused regardless of what the agent asked for.</p>
+        </div>
+      </section>
+
+      <!-- results -->
+      <section class="card hidden" data-pane="results">
+        <div class="chead"><h3>IDENTIFIED MATERIAL CARD</h3><span class="pill" id="res-state">—</span></div>
+        <div style="padding:12px 13px"><table class="kv" id="resulttab"></table>
+          <p class="note" id="res-just"></p>
+        </div>
+      </section>
+
+    </div>
   </main>
 
-  <footer class="rack">
-    <section class="panel">
-      <div class="phead">
-        <h2>PARAMETER VECTOR</h2>
-        <span class="note">arc = position within typical NiTi range</span>
+  <!-- ================= right panel ================= -->
+  <aside class="side">
+    <div class="sec approval hidden" id="approval">
+      <div class="sechead"><h3 style="color:#D9A15B">APPROVAL REQUIRED</h3><div class="live" style="color:#D9A15B"><i style="background:#D9A15B"></i><span>HELD</span></div></div>
+      <p class="note" style="margin-top:0">The agent has stopped at
+        <span class="mono">commit_calibration</span>, which writes the material card and
+        cannot be undone. TrueForge is holding it until a human decides.</p>
+      <table class="kv" style="margin-top:9px">
+        <tr><td>TOOL</td><td id="ap-tool">—</td></tr>
+        <tr><td>CALL ID</td><td id="ap-id">—</td></tr>
+        <tr><td>ASKED AT</td><td id="ap-at">—</td></tr>
+      </table>
+      <div class="apbtns">
+        <button class="deny" id="ap-deny">DENY</button>
+        <button class="allow" id="ap-allow">APPROVE</button>
       </div>
-      <div class="gaugerow" id="gauges"></div>
-    </section>
+    </div>
 
-    <section class="panel trend">
-      <div class="phead">
-        <h2>CONVERGENCE</h2>
-        <span class="note">log · % of peak</span>
+    <div class="sec">
+      <div class="sechead"><h3>INVERSION OVERVIEW</h3><div class="live" id="live2"><i></i><span>LIVE</span></div></div>
+      <div class="fitrow">
+        <div class="fitleft">
+          <span class="fitlabel">FIT QUALITY (RMS ERROR)</span>
+          <div class="fitval stale" id="fit">——<small>%</small></div>
+          <div class="fitdelta" id="fitdelta">awaiting first evaluation</div>
+        </div>
+        <svg id="particles" viewBox="0 0 126 106" aria-hidden="true"></svg>
       </div>
-      <div class="pbody"><svg id="spark"></svg></div>
-      <div class="banner" id="banner">
-        <i></i>
-        <span class="btext" id="banner-text">NO SIGNAL</span>
-        <span class="bsub" id="banner-sub"></span>
+      <div class="mgrid">
+        <div><span>RMS ERROR</span><b id="m-abs">—</b></div>
+        <div><span>PASS BAR</span><b id="m-bar">3.00 %</b></div>
+        <div><span>PEAK STRESS</span><b id="m-peak">—</b></div>
+        <div><span>DATA POINTS</span><b id="m-pts">—</b></div>
       </div>
-      <p class="caption">
-        <b>Approval state is not observable from here.</b> TrueForge holds
-        <span class="mono">commit_calibration</span> before its Python body runs, so this window
-        sees a commit only once a human has signed off — in TrueForge's own chat.
-      </p>
-    </section>
+    </div>
+
+    <div class="sec">
+      <div class="sechead"><h3>TRACE CURSOR</h3></div>
+      <table class="kv">
+        <tr><td>STRAIN ε</td><td id="c-eps">—</td></tr>
+        <tr><td>MEASURED σ</td><td id="c-meas">—</td></tr>
+        <tr><td>MODEL σ</td><td id="c-model">—</td></tr>
+        <tr><td>RESIDUAL</td><td id="c-res">—</td></tr>
+        <tr><td>REGIME</td><td id="c-reg">—</td></tr>
+      </table>
+    </div>
+
+    <div class="sec">
+      <div class="sechead"><h3>CONVERGENCE</h3><span class="pill">LOG SCALE</span></div>
+      <svg id="conv"></svg>
+    </div>
+
+    <div class="sec">
+      <div class="sechead"><h3>SOLVER STATUS</h3></div>
+      <div class="sgrid">
+        <div class="scell"><span>STATE</span><b id="s-state">—</b></div>
+        <div class="scell"><span>EVALUATIONS</span><b id="s-iter">—</b></div>
+        <div class="scell"><span>ELAPSED</span><b id="s-elapsed">—</b></div>
+        <div class="scell"><span>BEST RMSE</span><b id="s-best">—</b></div>
+      </div>
+      <p class="note" id="gatenote"><b>Approval is held by TrueForge, not here.</b>
+      <span class="mono">commit_calibration</span> is annotated destructive, so the harness pauses it
+      before its body runs — this window sees a commit only once a human has signed off.</p>
+    </div>
+  </aside>
+
+  <!-- ================= bottom bar ================= -->
+  <footer class="bar">
+    <span>Harness <b>TrueForge :8790</b></span>
+    <span>MCP <b id="b-mcp">:8000/mcp</b></span>
+    <span>Model <b id="b-model">—</b></span>
+    <span>Feed <b>:8001/progress</b></span>
+    <span>Precision <b>double</b></span>
+    <span>Units <b>SI (MPa, –)</b></span>
+    <span class="sync" id="b-sync"><i></i><span id="b-synctext">Synced</span></span>
   </footer>
 </div>
 
 <script>
-// Served by dashboard_api.py, so same-origin. Falls back to an absolute URL for
-// the case where the file is opened straight off disk.
 const API = location.protocol === 'file:' ? 'http://localhost:8001/progress' : '/progress';
 const POLL_MS = 1200;
 const PASS_PCT = 3.0;
-const PENDING_AFTER_MS = 8000;
-// RMSE of the true parameter set against this noisy trace -- the best any fit
-// can do here. Measured, not guessed: evaluate_model at TRUE_PARAMS returns it.
+// RMSE the true parameters themselves produce against this noisy trace: the best
+// any fit can do here. Measured via evaluate_model at TRUE_PARAMS, not guessed.
 const NOISE_FLOOR_PCT = 1.4;
 
 const PARAMS = [
-  ['E_A',      'austenite E',   'MPa', 30000, 70000, 0],
-  ['E_M',      'martensite E',  'MPa', 15000, 35000, 0],
-  ['eps_L',    'transf strain', '',    0.03,  0.06,  4],
-  ['sig_AS_s', 'fwd start',     'MPa', 300,   500,   1],
-  ['sig_AS_f', 'fwd finish',    'MPa', 340,   600,   1],
-  ['sig_SA_s', 'rev start',     'MPa', 150,   320,   1],
-  ['sig_SA_f', 'rev finish',    'MPa', 80,    220,   1],
+  ['E_A',      'Austenite E',           'MPa', 30000, 70000, 0],
+  ['E_M',      'Martensite E',          'MPa', 15000, 35000, 0],
+  ['eps_L',    'Transformation Strain', '',    0.03,  0.06,  4],
+  ['sig_AS_s', 'Start Stress (A→M)',    'MPa', 300,   500,   1],
+  ['sig_AS_f', 'Finish Stress (A→M)',   'MPa', 340,   600,   1],
+  ['sig_SA_s', 'Start Stress (M→A)',    'MPa', 150,   320,   1],
+  ['sig_SA_f', 'Finish Stress (M→A)',   'MPa', 80,    220,   1],
 ];
 
 const $ = id => document.getElementById(id);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
 const view = {
-  experimental: null,
-  evals: [],
-  committed: null,
-  reject: null,
-  rejectIsLatest: false,
-  linked: false,
-  eventCount: -1,
-  firstAt: null,
-  lastAt: null,
+  experimental: null, rawHistory: [], evals: [],
+  committed: null, reject: null, rejectIsLatest: false,
+  linked: false, eventCount: -1, firstAt: null, lastAt: null,
 };
 
-// History is append-only, so "did anything happen" is just its length. The change
-// is stamped from the local clock rather than at_utc: the inferred-pending timer
-// below must not drift with skew between the agent host and this page.
 let lastChangeAt = performance.now();
-
-// One failed poll is not a lost connection. The writer renames the state file
-// into place, so a read can still lose a race with it, and a single transient
-// failure should not blank a working dashboard mid-demo. Hold the last good
-// state and only report NO SIGNAL once failures persist.
 const OFFLINE_AFTER_FAILURES = 3;
 let consecutiveFailures = 0;
 
@@ -374,8 +535,7 @@ async function poll() {
   try {
     const r = await fetch(API, { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
-    const data = await r.json();
-    apply(data);
+    apply(await r.json());
     consecutiveFailures = 0;
     view.linked = true;
   } catch {
@@ -387,12 +547,8 @@ async function poll() {
 
 function apply(data) {
   view.experimental = data.experimental || null;
-
   const hist = data.history || [];
-  if (hist.length !== view.eventCount) {
-    view.eventCount = hist.length;
-    lastChangeAt = performance.now();
-  }
+  if (hist.length !== view.eventCount) { view.eventCount = hist.length; lastChangeAt = performance.now(); }
 
   const evals = [];
   let committed = null, reject = null, rejectIsLatest = false;
@@ -401,11 +557,8 @@ function apply(data) {
     else if (ev.type === 'commit_success') { committed = ev; rejectIsLatest = false; }
     else if (ev.type === 'commit_attempt' && !ev.committed) { reject = ev; rejectIsLatest = true; }
   }
-  view.rawHistory = hist;
-  view.evals = evals;
-  view.committed = committed;
-  view.reject = reject;
-  view.rejectIsLatest = rejectIsLatest;
+  view.rawHistory = hist; view.evals = evals;
+  view.committed = committed; view.reject = reject; view.rejectIsLatest = rejectIsLatest;
 
   const stamps = hist.map(e => Date.parse(e.at_utc || e.committed_at_utc)).filter(n => !isNaN(n));
   view.firstAt = stamps.length ? Math.min(...stamps) : null;
@@ -414,6 +567,7 @@ function apply(data) {
 
 const latestEval = () => view.evals.length ? view.evals[view.evals.length - 1] : null;
 const currentRmse = () => { const e = latestEval(); return e ? e.rmse_pct_of_peak : null; };
+const bestRmse = () => view.evals.reduce((m, e) => Math.min(m, e.rmse_pct_of_peak), Infinity);
 
 function status() {
   if (!view.linked) return 'offline';
@@ -421,171 +575,56 @@ function status() {
   if (view.rejectIsLatest) return 'rejected';
   const e = latestEval();
   if (!e) return 'idle';
-  // Soft inference only: a converged fit that has gone quiet is *probably* parked at
-  // TrueForge's approval prompt, but nothing here can confirm that. Labelled as
-  // inferred everywhere it surfaces.
-  if (e.rmse_pct_of_peak <= PASS_PCT && performance.now() - lastChangeAt > PENDING_AFTER_MS) return 'inferred';
-  return 'searching';
+  // Soft inference only: a converged fit that has gone quiet is probably parked at
+  // TrueForge's approval prompt, but nothing here can confirm that.
+  if (e.rmse_pct_of_peak <= PASS_PCT && performance.now() - lastChangeAt > 8000) return 'holding';
+  return 'solving';
 }
 
-const wheelSvg = $('wheel');
-let spin = null;
+/* ---------- shared geometry ---------- */
 
-function buildWheel() {
-  const W = innerWidth, H = innerHeight;
-  // R is capped rather than simply "big": past ~H*0.36 the only part of the ring
-  // left of the viewport edge is a near-vertical sliver, which reads as a stray
-  // arc instead of a dial. This keeps visible curvature inside the right column
-  // while the ring still runs off the edge.
-  const R = Math.max(Math.min(H * 0.36, 360), 260);
-  const cx = W - 80, cy = H * 0.40;
-
-  let ticks = '';
-  for (let a = 0; a < 360; a += 6) {
-    const long = a % 30 === 0;
-    const r0 = long ? R - 22 : R - 9;
-    const rad = (a - 90) * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
-    ticks += '<line x1="' + (r0 * c).toFixed(2) + '" y1="' + (r0 * s).toFixed(2) +
-             '" x2="' + (R * c).toFixed(2) + '" y2="' + (R * s).toFixed(2) +
-             '" stroke="#E8E5DE" stroke-width="' + (long ? 1.5 : 1) +
-             '" opacity="' + (long ? .95 : .5) + '"/>';
-  }
-
-  wheelSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-  wheelSvg.innerHTML =
-    '<g transform="translate(' + cx.toFixed(1) + ',' + cy.toFixed(1) + ')" opacity="0.22">' +
-      '<g id="wheel-spin">' +
-        '<circle r="' + R.toFixed(1) + '" fill="none" stroke="#E8E5DE" stroke-width="1"/>' +
-        '<circle r="' + (R - 22).toFixed(1) + '" fill="none" stroke="#E8E5DE" stroke-width="0.6" opacity="0.45"/>' +
-        ticks +
-      '</g>' +
-      '<circle r="' + (R * 0.62).toFixed(1) + '" fill="none" stroke="#E8E5DE" stroke-width="0.6" opacity="0.3"/>' +
-    '</g>';
-  spin = $('wheel-spin');
+const polar = (r, deg) => { const a = (deg - 90) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; };
+function arc(r, a0, a1) {
+  const p0 = polar(r, a0), p1 = polar(r, a1);
+  return 'M' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
+         'A' + r + ' ' + r + ' 0 ' + (a1 - a0 > 180 ? 1 : 0) + ' 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
 }
-
-// Driven by rAF rather than a CSS animation: animation-duration can only be retimed
-// by restarting the animation, which visibly jumps. Accumulating the angle lets the
-// ring ease from restless to settled as RMSE falls.
-function wheelDegPerSec() {
-  if (view.committed) return 0.35;
-  const r = currentRmse();
-  if (r == null) return 1.6;
-  const t = clamp((r - PASS_PCT) / (40 - PASS_PCT), 0, 1);
-  return 0.8 + t * t * 11;
-}
-
-// Index the cursor sweeps to, in trace order. Kept in sample space rather than
-// pixels so the readout is always an actual measured point, never interpolated.
-let cursorPos = 0;
-const SWEEP_SAMPLES_PER_SEC = 14;
-
-let angle = 0, prevFrame = performance.now();
-function spinFrame(now) {
-  const dt = Math.min((now - prevFrame) / 1000, 0.1);
-  prevFrame = now;
-  angle = (angle + wheelDegPerSec() * dt) % 360;
-  if (spin) spin.style.transform = 'rotate(' + angle.toFixed(3) + 'deg)';
-
-  const n = view.experimental && view.experimental.strain ? view.experimental.strain.length : 0;
-  if (n) {
-    cursorPos = (cursorPos + SWEEP_SAMPLES_PER_SEC * dt) % n;
-    paintCursor(Math.floor(cursorPos));
-  }
-  requestAnimationFrame(spinFrame);
-}
-
-const cursorLine = () => document.getElementById('sweep');
-
-function paintCursor(i) {
-  const exp = view.experimental;
-  if (!exp) return;
-  // Always the last evaluate: a commit_success carries the parameters but not
-  // the curve, so reading the model value off it leaves the readout blank
-  // exactly when the run has finished and someone is looking at it.
-  const src = latestEval();
-  const pred = src && src.predicted_stress_mpa ? src.predicted_stress_mpa : null;
-
-  const eps = exp.strain[i], meas = exp.stress_mpa[i];
-  const model = pred && i < pred.length ? pred[i] : null;
-  const res = model === null ? null : model - meas;
-
-  $('c-eps').textContent = eps.toFixed(5);
-  $('c-meas').textContent = meas.toFixed(1) + ' MPa';
-  $('c-model').textContent = model === null ? '—' : model.toFixed(1) + ' MPa';
-  const rc = $('c-res').parentElement;
-  $('c-res').textContent = res === null ? '—' : (res >= 0 ? '+' : '') + res.toFixed(1) + ' MPa';
-  rc.classList.toggle('warn', res !== null && Math.abs(res) > 25);
-
-  const cur = view.committed ? view.committed.params : (latestEval() || {}).params;
-  const rg = regimes(cur, Math.max.apply(null, exp.strain));
-  const loading = i <= exp.strain.indexOf(Math.max.apply(null, exp.strain));
-  let label = '—';
-  if (rg) {
-    if (loading) label = eps < rg.eps1 ? 'elastic · E_A' : eps <= rg.eps2 ? 'plateau · σAS' : 'post · E_M';
-    else label = (eps >= rg.eps4 && eps <= rg.eps3) ? 'reverse · σSA' : 'elastic · E_A';
-  }
-  $('c-reg').textContent = label;
-
-  // Raw values around the cursor: the plotted trace, readable as numbers.
-  const tab = $('rawtab');
-  if (tab && tab.offsetParent) {
-    let html = '<tr class="hd"><td>#</td><td>ε</td><td>σ MEAS</td><td>σ MODEL</td></tr>';
-    for (let k = i - 2; k <= i + 2; k++) {
-      if (k < 0 || k >= exp.strain.length) continue;
-      const m = pred && k < pred.length ? pred[k].toFixed(1) : '—';
-      html += '<tr class="' + (k === i ? 'at' : '') + '"><td>' + k + '</td><td>' +
-              exp.strain[k].toFixed(5) + '</td><td>' + exp.stress_mpa[k].toFixed(1) +
-              '</td><td>' + m + '</td></tr>';
-    }
-    tab.innerHTML = html;
-  }
-
-  const line = cursorLine();
-  if (line && chartGeom) {
-    const x = chartGeom.px(eps);
-    line.setAttribute('x1', x.toFixed(1));
-    line.setAttribute('x2', x.toFixed(1));
-    line.setAttribute('y1', chartGeom.top);
-    line.setAttribute('y2', chartGeom.bottom);
-    line.setAttribute('opacity', '0.5');
-  }
-}
-
-const chartSvg = $('chart');
-const PAD = { l: 54, r: 16, t: 14, b: 30 };
-// Scale published by the last draw, so the sweeping cursor can position itself
-// between redraws without recomputing the layout on every frame.
-let chartGeom = null;
-
 function niceCeil(v) {
   const step = Math.pow(10, Math.floor(Math.log10(v))) / 2;
   return Math.ceil(v / step) * step;
 }
+function box(svg) {
+  const r = svg.getBoundingClientRect();
+  const W = Math.max(r.width, 10), H = Math.max(r.height, 10);
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  return [W, H];
+}
+const txt = (x, y, s, o = {}) =>
+  '<text x="' + x + '" y="' + y + '" fill="' + (o.fill || '#4A5C6A') + '" font-family="' +
+  (o.mono === false ? 'Inter,sans-serif' : 'IBM Plex Mono,monospace') + '" font-size="' + (o.size || 9) +
+  '" text-anchor="' + (o.anchor || 'start') + '"' + (o.ls ? ' letter-spacing="' + o.ls + '"' : '') +
+  (o.op ? ' opacity="' + o.op + '"' : '') + '>' + s + '</text>';
 
-// Same transitions the model uses, so the bands mark where the current guess
-// thinks each regime begins -- they move as the fit changes, which is the point.
+// Same transitions the model uses, so the regime marks track the current guess.
 function regimes(p, epsMax) {
   if (!p) return null;
   const eps1 = p.sig_AS_s / p.E_A;
   const eps2 = eps1 + p.eps_L;
   const sigMax = p.sig_AS_f + p.E_M * (epsMax - eps2);
-  return {
-    eps1, eps2,
-    eps3: epsMax - (sigMax - p.sig_SA_s) / p.E_M,
-    eps4: p.sig_SA_f / p.E_A,
-  };
+  return { eps1, eps2, eps3: epsMax - (sigMax - p.sig_SA_s) / p.E_M, eps4: p.sig_SA_f / p.E_A };
 }
+const activeParams = () => view.committed ? view.committed.params : (latestEval() || {}).params;
+
+/* ---------- response chart ---------- */
+
+const PAD = { l: 58, r: 18, t: 16, b: 34 };
+let chartGeom = null;
 
 function drawChart() {
-  const box = chartSvg.parentElement.getBoundingClientRect();
-  const W = Math.max(box.width, 10), H = Math.max(box.height, 10);
-  chartSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-
+  const svg = $('chart'), [W, H] = box(svg);
   const exp = view.experimental;
   if (!exp || !exp.strain || !exp.strain.length) {
-    chartSvg.innerHTML = '<text x="' + (W / 2) + '" y="' + (H / 2) +
-      '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="11" text-anchor="middle" letter-spacing="1.6">AWAITING EXPERIMENTAL TRACE</text>';
+    svg.innerHTML = txt(W / 2, H / 2, 'AWAITING EXPERIMENTAL TRACE', { anchor: 'middle', size: 10, ls: 1.6 });
     return;
   }
 
@@ -598,91 +637,70 @@ function drawChart() {
   let g = '';
   for (let i = 0; i <= 5; i++) {
     const yv = (yMax / 5) * i, y = py(yv);
-    g += '<line x1="' + PAD.l + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.r).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#232830" stroke-width="1"/>' +
-         '<text x="' + (PAD.l - 9) + '" y="' + (y + 3.5).toFixed(1) + '" fill="#79838D" font-family="IBM Plex Mono,monospace" font-size="9.5" text-anchor="end">' + yv.toFixed(0) + '</text>';
+    g += '<line x1="' + PAD.l + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.r).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#152430"/>' +
+         txt(PAD.l - 9, y + 3.5, yv.toFixed(0), { anchor: 'end', fill: '#7E93A2' });
     const xv = (xMax / 5) * i, x = px(xv);
-    g += '<line x1="' + x.toFixed(1) + '" y1="' + PAD.t + '" x2="' + x.toFixed(1) + '" y2="' + (H - PAD.b).toFixed(1) + '" stroke="#1B1F24" stroke-width="1"/>' +
-         '<text x="' + x.toFixed(1) + '" y="' + (H - PAD.b + 15).toFixed(1) + '" fill="#79838D" font-family="IBM Plex Mono,monospace" font-size="9.5" text-anchor="middle">' + xv.toFixed(3) + '</text>';
+    g += '<line x1="' + x.toFixed(1) + '" y1="' + PAD.t + '" x2="' + x.toFixed(1) + '" y2="' + (H - PAD.b).toFixed(1) + '" stroke="#111E28"/>' +
+         txt(x, H - PAD.b + 16, xv.toFixed(3), { anchor: 'middle', fill: '#7E93A2' });
   }
-  g += '<text x="' + (PAD.l - 9) + '" y="' + (PAD.t + 1) + '" fill="#4E565E" font-family="IBM Plex Sans,sans-serif" font-size="9" text-anchor="end" letter-spacing="1.5">MPa</text>' +
-       '<text x="' + (W - PAD.r).toFixed(1) + '" y="' + (H - 6).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Sans,sans-serif" font-size="9" text-anchor="end" letter-spacing="1.5">STRAIN ε</text>';
+  g += txt(16, (PAD.t + H - PAD.b) / 2, 'STRESS (MPa)', { anchor: 'middle', size: 8.5, ls: 1.4, mono: false }).replace('<text', '<text transform="rotate(-90 16 ' + ((PAD.t + H - PAD.b) / 2).toFixed(1) + ')"') +
+       txt((PAD.l + W - PAD.r) / 2, H - 6, 'STRAIN', { anchor: 'middle', size: 8.5, ls: 1.4, mono: false });
 
-  // Regime bands sit under everything: they say which parameter governs the
-  // part of the curve you are looking at, which is the whole reading task.
   let bands = '';
-  const cur = view.committed ? view.committed.params : (latestEval() || {}).params;
-  const rg = regimes(cur, Math.max.apply(null, exp.strain));
+  const rg = regimes(activeParams(), Math.max.apply(null, exp.strain));
   if (rg && rg.eps1 > 0 && rg.eps2 > rg.eps1 && rg.eps2 < xMax) {
-    const span = (a, b, fill) =>
-      '<rect x="' + px(a).toFixed(1) + '" y="' + PAD.t + '" width="' + Math.max(0, px(b) - px(a)).toFixed(1) +
-      '" height="' + (H - PAD.t - PAD.b).toFixed(1) + '" fill="' + fill + '"/>';
     const mark = (x, label) =>
       '<line x1="' + px(x).toFixed(1) + '" y1="' + PAD.t + '" x2="' + px(x).toFixed(1) + '" y2="' + (H - PAD.b).toFixed(1) +
-      '" stroke="#6FA8A3" stroke-width="1" stroke-dasharray="2 4" opacity="0.5"/>' +
-      '<text x="' + (px(x) + 4).toFixed(1) + '" y="' + (PAD.t + 10) + '" fill="#6FA8A3" font-family="IBM Plex Mono,monospace" font-size="8" opacity="0.75" letter-spacing="1">' + label + '</text>';
-    bands = span(0, rg.eps1, 'rgba(232,229,222,0.022)') +
-            span(rg.eps1, rg.eps2, 'rgba(111,168,163,0.055)') +
-            span(rg.eps2, xMax, 'rgba(232,229,222,0.022)') +
-            mark(rg.eps1, 'ε1 E_A') + mark(rg.eps2, 'ε2 E_M');
+      '" stroke="#65D6D3" stroke-dasharray="3 4" opacity="0.45"/>' +
+      txt(px(x) + 5, PAD.t + 11, label, { fill: '#65D6D3', size: 8.5, op: 0.8 });
+    bands = '<rect x="' + px(rg.eps1).toFixed(1) + '" y="' + PAD.t + '" width="' + Math.max(0, px(rg.eps2) - px(rg.eps1)).toFixed(1) +
+            '" height="' + (H - PAD.t - PAD.b).toFixed(1) + '" fill="rgba(101,214,211,0.045)"/>' +
+            mark(rg.eps1, 'ε_A') + mark(rg.eps2, 'ε_M');
   }
 
   let dots = '';
   for (let i = 0; i < exp.strain.length; i++) {
-    dots += '<circle cx="' + px(exp.strain[i]).toFixed(1) + '" cy="' + py(exp.stress_mpa[i]).toFixed(1) + '" r="1.7" fill="#E8E5DE" opacity="0.42"/>';
+    dots += '<circle cx="' + px(exp.strain[i]).toFixed(1) + '" cy="' + py(exp.stress_mpa[i]).toFixed(1) + '" r="1.9" fill="#65D6D3" opacity="0.62"/>';
   }
 
   const curve = ev => {
     const s = ev.predicted_stress_mpa;
     if (!s) return '';
     let d = '';
-    for (let i = 0; i < s.length && i < exp.strain.length; i++) {
-      d += (i ? 'L' : 'M') + px(exp.strain[i]).toFixed(1) + ' ' + py(s[i]).toFixed(1);
-    }
+    for (let i = 0; i < s.length && i < exp.strain.length; i++) d += (i ? 'L' : 'M') + px(exp.strain[i]).toFixed(1) + ' ' + py(s[i]).toFixed(1);
     return d;
   };
 
-  let ghosts = '';
+  let prior = '';
   const n = view.evals.length;
-  const ghostFrom = Math.max(0, n - 4);
-  for (let k = ghostFrom; k < n - 1; k++) {
-    const d = curve(view.evals[k]);
-    if (d) ghosts += '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="1" opacity="' + (0.08 + 0.06 * (k - ghostFrom)).toFixed(2) + '"/>';
+  if (n >= 2) {
+    const d = curve(view.evals[n - 2]);
+    if (d) prior = '<path d="' + d + '" fill="none" stroke="#4A5C6A" stroke-width="1.2" stroke-dasharray="5 4" opacity="0.8"/>';
   }
-
   let live = '';
   const last = latestEval();
   if (last) {
     const d = curve(last);
-    if (d) {
-      const done = !!view.committed;
-      live = '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="' + (done ? 2 : 1.7) + '" stroke-linejoin="round" opacity="' + (done ? 1 : .92) + '"/>';
-    }
+    if (d) live = '<path d="' + d + '" fill="none" stroke="#65D6D3" stroke-width="1.9" stroke-linejoin="round"/>';
   }
 
   let stamp = '';
   if (view.committed) {
-    stamp = '<g transform="translate(' + (PAD.l + 14).toFixed(1) + ',' + (PAD.t + 20).toFixed(1) + ')">' +
-      '<rect x="0" y="-11" width="132" height="17" fill="none" stroke="#6FA8A3" stroke-width="1" opacity="0.55"/>' +
-      '<text x="9" y="1.5" fill="#6FA8A3" font-family="IBM Plex Mono,monospace" font-size="9.5" letter-spacing="2">CARD COMMITTED</text></g>';
+    stamp = '<g transform="translate(' + (PAD.l + 12) + ',' + (PAD.t + 20) + ')">' +
+      '<rect x="0" y="-11" width="132" height="17" fill="none" stroke="#5FCFA8" opacity="0.6"/>' +
+      txt(9, 1.5, 'CARD COMMITTED', { fill: '#5FCFA8', size: 9, ls: 1.6 }) + '</g>';
   }
 
-  const sweep = '<line id="sweep" x1="0" y1="0" x2="0" y2="0" stroke="#E8E5DE" stroke-width="1" opacity="0"/>';
-  chartSvg.innerHTML = bands + g + dots + ghosts + live + stamp + sweep;
+  svg.innerHTML = bands + g + dots + prior + live + stamp +
+    '<line id="sweep" x1="0" y1="0" x2="0" y2="0" stroke="#DCE7EE" opacity="0"/>';
 }
 
-const residSvg = $('resid');
+/* ---------- residual ---------- */
 
-// The residual is what a fit is actually judged on: RMSE compresses it to one
-// number, and structure left in it -- a whole region sitting above zero -- is
-// the part that says which parameter is still wrong.
 function drawResidual() {
-  const box = residSvg.parentElement.getBoundingClientRect();
-  const W = Math.max(box.width, 10), H = Math.max(box.height, 10);
-  residSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-
-  const exp = view.experimental, last = view.committed ? null : latestEval();
-  const src = view.committed ? view.evals[view.evals.length - 1] : last;
-  if (!exp || !src || !src.predicted_stress_mpa) { residSvg.innerHTML = ''; return; }
+  const svg = $('resid'), [W, H] = box(svg);
+  const exp = view.experimental, src = latestEval();
+  if (!exp || !src || !src.predicted_stress_mpa) { svg.innerHTML = ''; return; }
 
   const pred = src.predicted_stress_mpa;
   const n = Math.min(pred.length, exp.strain.length);
@@ -690,358 +708,548 @@ function drawResidual() {
   for (let i = 0; i < n; i++) lim = Math.max(lim, Math.abs(pred[i] - exp.stress_mpa[i]));
   lim = Math.max(niceCeil(lim || 1), 5);
 
-  const T = 18, B = 14;
-  const px = v => PAD.l + (v / Math.max.apply(null, exp.strain)) * (W - PAD.l - PAD.r);
+  const T = 14, B = 18, xMax = Math.max.apply(null, exp.strain);
+  const px = v => PAD.l + (v / xMax) * (W - PAD.l - PAD.r);
   const py = v => (T + H - B) / 2 - (v / lim) * ((H - T - B) / 2);
 
   let g = '';
   for (const v of [lim, 0, -lim]) {
     const y = py(v);
     g += '<line x1="' + PAD.l + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD.r).toFixed(1) + '" y2="' + y.toFixed(1) +
-         '" stroke="' + (v === 0 ? '#3A424A' : '#1B1F24') + '" stroke-width="1"/>' +
-         '<text x="' + (PAD.l - 9) + '" y="' + (y + 3).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="8" text-anchor="end">' +
-         (v > 0 ? '+' : '') + v.toFixed(0) + '</text>';
+         '" stroke="' + (v === 0 ? '#2B3D4A' : '#152430') + '"/>' +
+         txt(PAD.l - 9, y + 3, (v > 0 ? '+' : '') + v.toFixed(0), { anchor: 'end', fill: '#7E93A2', size: 8.5 });
   }
+  g += txt(16, H / 2, 'RESIDUAL', { anchor: 'middle', size: 8, ls: 1.3, mono: false }).replace('<text', '<text transform="rotate(-90 16 ' + (H / 2).toFixed(1) + ')"');
 
   let d = '';
-  for (let i = 0; i < n; i++) {
-    d += (i ? 'L' : 'M') + px(exp.strain[i]).toFixed(1) + ' ' + py(pred[i] - exp.stress_mpa[i]).toFixed(1);
-  }
+  for (let i = 0; i < n; i++) d += (i ? 'L' : 'M') + px(exp.strain[i]).toFixed(1) + ' ' + py(pred[i] - exp.stress_mpa[i]).toFixed(1);
   const zero = py(0).toFixed(1);
   const area = d + 'L' + px(exp.strain[n - 1]).toFixed(1) + ' ' + zero + 'L' + px(exp.strain[0]).toFixed(1) + ' ' + zero + 'Z';
 
-  residSvg.innerHTML = g +
-    '<path d="' + area + '" fill="#6FA8A3" opacity="0.13"/>' +
-    '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="1.2"/>';
+  svg.innerHTML = g + '<path d="' + area + '" fill="#65D6D3" opacity="0.1"/>' +
+                  '<path d="' + d + '" fill="none" stroke="#65D6D3" stroke-width="1.2"/>';
 }
 
-const polar = (r, deg) => { const a = (deg - 90) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; };
+/* ---------- error metrics: signed mean per regime ---------- */
 
-function arc(r, a0, a1) {
-  const p0 = polar(r, a0), p1 = polar(r, a1);
-  return 'M' + p0[0].toFixed(2) + ' ' + p0[1].toFixed(2) +
-         'A' + r + ' ' + r + ' 0 ' + (a1 - a0 > 180 ? 1 : 0) + ' 1 ' + p1[0].toFixed(2) + ' ' + p1[1].toFixed(2);
-}
-
-const SWEEP = 270, A0 = -135, GR = 26;
-
-function buildGauges() {
-  $('gauges').innerHTML = PARAMS.map(p =>
-    '<div class="gauge" id="g-' + p[0] + '">' +
-      '<span class="gname">' + p[0] + '</span>' +
-      '<span class="gdesc">' + p[1] + '</span>' +
-      '<svg viewBox="-34 -34 68 60">' +
-        '<path d="' + arc(GR, A0, A0 + SWEEP) + '" fill="none" stroke="#232830" stroke-width="3.5"/>' +
-        '<path class="gfill" d="" fill="none" stroke="#6FA8A3" stroke-width="3.5"/>' +
-        '<line class="gneedle" x1="0" y1="0" x2="0" y2="0" stroke="#E8E5DE" stroke-width="1.2" opacity="0"/>' +
-        '<circle r="1.6" fill="#4E565E"/>' +
-      '</svg>' +
-      '<span class="gval">—</span>' +
-      '<span class="gunit">' + (p[2] || '—') + '</span>' +
-    '</div>').join('');
-}
-
-function drawGauges() {
-  const e = latestEval();
-  const p = view.committed ? view.committed.params : (e ? e.params : null);
-
-  for (const [key, , , lo, hi, dp] of PARAMS) {
-    const el = $('g-' + key);
-    const fill = el.querySelector('.gfill');
-    const needle = el.querySelector('.gneedle');
-    const val = el.querySelector('.gval');
-
-    if (!p || p[key] == null) {
-      fill.setAttribute('d', '');
-      needle.setAttribute('opacity', '0');
-      val.textContent = '—';
-      el.classList.remove('oor');
-      continue;
-    }
-
-    const v = p[key];
-    const raw = (v - lo) / (hi - lo);
-    const a = A0 + SWEEP * clamp(raw, 0, 1);
-    const oor = raw < -0.001 || raw > 1.001;
-
-    fill.setAttribute('d', arc(GR, A0, Math.max(a, A0 + 0.01)));
-    fill.setAttribute('stroke', oor ? '#D9A15B' : '#6FA8A3');
-    const tip = polar(GR - 5.5, a), base = polar(8, a);
-    needle.setAttribute('x1', base[0].toFixed(2)); needle.setAttribute('y1', base[1].toFixed(2));
-    needle.setAttribute('x2', tip[0].toFixed(2));  needle.setAttribute('y2', tip[1].toFixed(2));
-    needle.setAttribute('opacity', '0.85');
-    val.textContent = v.toFixed(dp);
-    el.classList.toggle('oor', oor);
+function regionMeans() {
+  const exp = view.experimental, src = latestEval();
+  if (!exp || !src || !src.predicted_stress_mpa) return null;
+  const p = activeParams(), pred = src.predicted_stress_mpa;
+  const xMax = Math.max.apply(null, exp.strain), rg = regimes(p, xMax);
+  if (!rg) return null;
+  const peak = exp.strain.indexOf(xMax);
+  const acc = { elastic_loading: [0, 0], plateau_loading: [0, 0], post_plateau_loading: [0, 0], plateau_unloading: [0, 0] };
+  for (let i = 0; i < Math.min(pred.length, exp.strain.length); i++) {
+    const e = exp.strain[i], r = pred[i] - exp.stress_mpa[i];
+    let k = null;
+    if (i <= peak) k = e < rg.eps1 ? 'elastic_loading' : e <= rg.eps2 ? 'plateau_loading' : 'post_plateau_loading';
+    else if (e >= rg.eps4 && e <= rg.eps3) k = 'plateau_unloading';
+    if (k) { acc[k][0] += r; acc[k][1]++; }
   }
+  return Object.entries(acc).map(([k, [s, c]]) => ({ k, mean: c ? s / c : null }));
 }
 
-const sparkSvg = $('spark');
+const REGIME_LABEL = {
+  elastic_loading: ['Elastic loading', 'E_A'],
+  plateau_loading: ['Forward plateau', 'σ_AS'],
+  post_plateau_loading: ['Post-transformation', 'E_M'],
+  plateau_unloading: ['Reverse plateau', 'σ_SA'],
+};
 
-function drawSpark() {
-  const box = sparkSvg.parentElement.getBoundingClientRect();
-  const W = Math.max(box.width, 10), H = Math.max(box.height, 10);
-  sparkSvg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+function drawErrorMetrics() {
+  const svg = $('errm'), [W, H] = box(svg);
+  const rows = regionMeans();
+  if (!rows) { svg.innerHTML = txt(W / 2, H / 2, 'NO EVALUATION YET', { anchor: 'middle', ls: 1.5 }); return; }
 
-  const L = 30, R = 8, T = 8, B = 15;
-  // Log y: a run routinely spans 60% -> 1%, which a linear axis flattens into one
-  // vertical drop followed by a dead flat line. The range tracks the data (rather
-  // than a fixed 0.2-100) so a late run that only moves 5% -> 1.8% still shows its
-  // descent instead of collapsing onto the top gridline. Always keeps the pass bar
-  // in frame so the number has something to be judged against.
+  const L = 168, R = 24, T = 26, rowH = (H - T - 20) / rows.length;
+  let lim = Math.max.apply(null, rows.map(r => Math.abs(r.mean || 0)));
+  lim = Math.max(niceCeil(lim || 1), 5);
+  const cx = L + (W - L - R) / 2;
+  const sx = v => cx + (v / lim) * ((W - L - R) / 2);
+
+  let g = txt(L, 14, 'SIGNED MEAN ERROR — negative: model below measurement', { size: 8.5, ls: .8, mono: false });
+  g += '<line x1="' + cx + '" y1="' + T + '" x2="' + cx + '" y2="' + (H - 18) + '" stroke="#2B3D4A"/>';
+  for (const v of [-lim, 0, lim]) {
+    g += txt(sx(v), H - 5, (v > 0 ? '+' : '') + v.toFixed(0), { anchor: 'middle', fill: '#4A5C6A', size: 8.5 });
+  }
+
+  rows.forEach((r, i) => {
+    const y = T + rowH * i + rowH / 2, m = r.mean;
+    const [label, gov] = REGIME_LABEL[r.k];
+    g += txt(12, y + 3.5, label, { fill: '#DCE7EE', size: 10, mono: false }) +
+         txt(L - 14, y + 3.5, gov, { anchor: 'end', fill: '#65D6D3', size: 9.5 });
+    if (m === null) { g += txt(cx + 8, y + 3.5, 'empty', { fill: '#4A5C6A', size: 9 }); return; }
+    const x0 = Math.min(cx, sx(m)), w = Math.abs(sx(m) - cx);
+    g += '<rect x="' + x0.toFixed(1) + '" y="' + (y - 7).toFixed(1) + '" width="' + w.toFixed(1) + '" height="14" fill="' +
+         (Math.abs(m) > 10 ? '#D2705A' : '#65D6D3') + '" opacity="0.5"/>' +
+         txt(sx(m) + (m >= 0 ? 7 : -7), y + 3.5, (m >= 0 ? '+' : '') + m.toFixed(1), { anchor: m >= 0 ? 'start' : 'end', fill: '#DCE7EE', size: 9.5 });
+  });
+  svg.innerHTML = g;
+}
+
+/* ---------- sensitivity ---------- */
+// Measured offline by perturbing each parameter 12% from the true set and
+// re-scoring; recorded here because the dashboard cannot run the model itself.
+const SENSITIVITY = [
+  ['eps_L', 5.995], ['sig_AS_f', 3.275], ['sig_AS_s', 1.365],
+  ['E_A', 0.830], ['E_M', 0.453], ['sig_SA_s', 0.436], ['sig_SA_f', 0.210],
+];
+
+function drawSensitivity() {
+  const svg = $('sens'), [W, H] = box(svg);
+  const L = 96, R = 58, T = 30, rowH = (H - T - 16) / SENSITIVITY.length;
+  const max = SENSITIVITY[0][1] * 1.05;
+  const bw = v => (v / max) * (W - L - R);
+
+  let g = txt(12, 15, 'Δ RMSE (pts) when the parameter is moved 12% from truth', { size: 8.5, ls: .7, mono: false }) +
+          txt(W - R + 6, 15, 'identifiability', { size: 8, fill: '#4A5C6A', ls: .7, mono: false });
+
+  SENSITIVITY.forEach(([name, v], i) => {
+    const y = T + rowH * i + rowH / 2;
+    const weak = v < 0.6;
+    g += txt(L - 12, y + 3.5, name, { anchor: 'end', fill: '#DCE7EE', size: 10.5 }) +
+         '<rect x="' + L + '" y="' + (y - 8).toFixed(1) + '" width="' + bw(v).toFixed(1) + '" height="16" fill="' +
+         (weak ? '#D9A15B' : '#65D6D3') + '" opacity="' + (weak ? 0.45 : 0.55) + '"/>' +
+         txt(L + bw(v) + 8, y + 3.5, v.toFixed(2), { fill: '#DCE7EE', size: 9.5 }) +
+         (weak ? txt(W - R + 6, y + 3.5, 'weak', { fill: '#D9A15B', size: 8.5, mono: false }) : '');
+  });
+  svg.innerHTML = g;
+}
+
+/* ---------- convergence ---------- */
+
+function drawConv() {
+  const svg = $('conv'), [W, H] = box(svg);
   const vals = view.evals.map(e => e.rmse_pct_of_peak).filter(v => v > 0);
-  // Floor the range below the noise floor so that line stays on screen -- it is
-  // the reference the whole descent is heading toward.
-  const lo = Math.max(0.05, Math.min(NOISE_FLOOR_PCT * 0.8, PASS_PCT * 0.55,
-                                     vals.length ? Math.min.apply(null, vals) * 0.75 : 1));
+  const lo = Math.max(0.05, Math.min(NOISE_FLOOR_PCT * 0.8, PASS_PCT * 0.55, vals.length ? Math.min.apply(null, vals) * 0.75 : 1));
   const hi = Math.max(PASS_PCT * 1.4, vals.length ? Math.max.apply(null, vals) * 1.3 : 10);
   const lgLo = Math.log10(lo), lgHi = Math.log10(hi);
+  const L = 30, R = 34, T = 10, B = 18;
   const yOf = v => H - B - ((Math.log10(clamp(v, lo, hi)) - lgLo) / (lgHi - lgLo)) * (H - T - B);
 
   let g = '';
-  const decades = [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].filter(d => d >= lo && d <= hi);
-  for (const dec of decades.slice(0, 5)) {
+  for (const dec of [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100].filter(d => d >= lo && d <= hi).slice(0, 5)) {
     const y = yOf(dec);
-    g += '<line x1="' + L + '" y1="' + y.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#1B1F24" stroke-width="1"/>' +
-         '<text x="' + (L - 6) + '" y="' + (y + 3).toFixed(1) + '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="8.5" text-anchor="end">' + (dec < 1 ? dec : dec.toFixed(0)) + '</text>';
+    g += '<line x1="' + L + '" y1="' + y.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#152430"/>' +
+         txt(L - 5, y + 3, dec < 1 ? dec : dec.toFixed(0), { anchor: 'end', size: 8 });
   }
   const ty = yOf(PASS_PCT);
-  g += '<line x1="' + L + '" y1="' + ty.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#D9A15B" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"/>' +
-       '<text x="' + (W - R).toFixed(1) + '" y="' + (ty - 4).toFixed(1) + '" fill="#D9A15B" font-family="IBM Plex Mono,monospace" font-size="8.5" text-anchor="end" opacity="0.8">PASS 3%</text>';
-
-  // The measurement noise puts a floor under the achievable residual: fitting
-  // below it would be fitting the noise. Worth drawing, so a run that stops
-  // just above it reads as converged rather than as having given up.
+  g += '<line x1="' + L + '" y1="' + ty.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ty.toFixed(1) + '" stroke="#D9A15B" stroke-dasharray="3 3" opacity="0.6"/>' +
+       txt(W - R + 4, ty + 3, 'PASS', { fill: '#D9A15B', size: 8, op: .85 });
   if (NOISE_FLOOR_PCT >= lo && NOISE_FLOOR_PCT <= hi) {
     const ny = yOf(NOISE_FLOOR_PCT);
-    g += '<line x1="' + L + '" y1="' + ny.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ny.toFixed(1) +
-         '" stroke="#E8E5DE" stroke-width="1" stroke-dasharray="1 3" opacity="0.35"/>' +
-         '<text x="' + (L + 4) + '" y="' + (ny - 3).toFixed(1) + '" fill="#79838D" font-family="IBM Plex Mono,monospace" font-size="8" opacity="0.75">NOISE FLOOR</text>';
+    g += '<line x1="' + L + '" y1="' + ny.toFixed(1) + '" x2="' + (W - R).toFixed(1) + '" y2="' + ny.toFixed(1) + '" stroke="#DCE7EE" stroke-dasharray="1 3" opacity="0.3"/>' +
+         txt(W - R + 4, ny + 3, 'FLOOR', { fill: '#7E93A2', size: 8, op: .8 });
   }
 
   const n = view.evals.length;
   if (n) {
     const xOf = i => n === 1 ? (L + W - R) / 2 : L + (i / (n - 1)) * (W - R - L);
-    let d = '', pts = '';
-    view.evals.forEach((ev, i) => {
-      const x = xOf(i), y = yOf(ev.rmse_pct_of_peak);
-      d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
-      if (n <= 40) pts += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="1.4" fill="#6FA8A3" opacity="0.55"/>';
-    });
-    g += '<path d="' + d + '" fill="none" stroke="#6FA8A3" stroke-width="1.4" stroke-linejoin="round"/>' + pts +
-         '<circle cx="' + xOf(n - 1).toFixed(1) + '" cy="' + yOf(view.evals[n - 1].rmse_pct_of_peak).toFixed(1) + '" r="2.8" fill="#6FA8A3"/>';
+    let d = '';
+    view.evals.forEach((ev, i) => { d += (i ? 'L' : 'M') + xOf(i).toFixed(1) + ' ' + yOf(ev.rmse_pct_of_peak).toFixed(1); });
+    g += '<path d="' + d + '" fill="none" stroke="#65D6D3" stroke-width="1.4" stroke-linejoin="round"/>' +
+         '<circle cx="' + xOf(n - 1).toFixed(1) + '" cy="' + yOf(view.evals[n - 1].rmse_pct_of_peak).toFixed(1) + '" r="2.8" fill="#65D6D3"/>' +
+         txt((L + W - R) / 2, H - 4, 'ITERATION', { anchor: 'middle', size: 8, ls: 1.2, mono: false });
   } else {
-    g += '<text x="' + (W / 2) + '" y="' + (H / 2 + 3) + '" fill="#4E565E" font-family="IBM Plex Mono,monospace" font-size="9.5" text-anchor="middle" letter-spacing="1.4">NO EVALUATIONS YET</text>';
+    g += txt(W / 2, H / 2, 'NO EVALUATIONS YET', { anchor: 'middle', ls: 1.3 });
   }
-  sparkSvg.innerHTML = g;
+  svg.innerHTML = g;
 }
 
-const BANNERS = {
-  offline:   ['NO SIGNAL',              '',          'start dashboard_api.py'],
-  idle:      ['LINKED · IDLE',          '',          'waiting for first evaluate_model'],
-  searching: ['SEARCHING',              'searching', ''],
-  inferred:  ['LIKELY AWAITING SIGN-OFF','inferred', 'inferred'],
-  rejected:  ['COMMIT REJECTED',        'rejected',  ''],
-  committed: ['CALIBRATION COMMITTED',  'committed', ''],
+/* ---------- parameter gauges ---------- */
+
+const SWEEP = 260, A0 = -130, GR = 25;
+
+function buildParams() {
+  $('pv').innerHTML = PARAMS.map(p =>
+    '<div class="pcard" id="p-' + p[0] + '">' +
+      '<div class="sym">' + p[0] + '</div><div class="desc">' + p[1] + '</div>' +
+      '<svg viewBox="-33 -33 66 56">' +
+        '<path d="' + arc(GR, A0, A0 + SWEEP) + '" fill="none" stroke="#1B2A36" stroke-width="3"/>' +
+        '<path class="fill" d="" fill="none" stroke="#65D6D3" stroke-width="3"/>' +
+        '<line class="ndl" x1="0" y1="0" x2="0" y2="0" stroke="#DCE7EE" stroke-width="1.1" opacity="0"/>' +
+        '<circle r="1.5" fill="#4A5C6A"/>' +
+      '</svg>' +
+      '<div class="val">—</div><div class="unit">' + (p[2] || '—') + '</div>' +
+    '</div>').join('');
+}
+
+function drawParams() {
+  const p = activeParams();
+  for (const [key, , , lo, hi, dp] of PARAMS) {
+    const el = $('p-' + key), fill = el.querySelector('.fill'), ndl = el.querySelector('.ndl'), val = el.querySelector('.val');
+    if (!p || p[key] == null) { fill.setAttribute('d', ''); ndl.setAttribute('opacity', '0'); val.textContent = '—'; el.classList.remove('oor'); continue; }
+    const v = p[key], raw = (v - lo) / (hi - lo), a = A0 + SWEEP * clamp(raw, 0, 1);
+    const oor = raw < -0.001 || raw > 1.001;
+    fill.setAttribute('d', arc(GR, A0, Math.max(a, A0 + 0.01)));
+    fill.setAttribute('stroke', oor ? '#D9A15B' : '#65D6D3');
+    const tip = polar(GR - 5, a), base = polar(7, a);
+    ndl.setAttribute('x1', base[0].toFixed(2)); ndl.setAttribute('y1', base[1].toFixed(2));
+    ndl.setAttribute('x2', tip[0].toFixed(2)); ndl.setAttribute('y2', tip[1].toFixed(2));
+    ndl.setAttribute('opacity', '0.85');
+    val.textContent = v.toFixed(dp);
+    el.classList.toggle('oor', oor);
+  }
+}
+
+/* ---------- particle ring ---------- */
+// Tightens and slows as the residual falls: a converged run settles into a
+// clean annulus, a searching one is loose and restless.
+let ringPhase = 0;
+const RING_N = 64;
+function drawParticles(dt) {
+  const svg = $('particles'), r = currentRmse();
+  const t = r == null ? 1 : clamp((r - PASS_PCT) / (30 - PASS_PCT), 0, 1);
+  const spread = 3 + t * 16;
+  ringPhase += dt * (0.12 + t * 0.75);
+
+  const cx = 63, cy = 53, R = 34;
+  let dots = '';
+  for (let i = 0; i < RING_N; i++) {
+    const a = (i / RING_N) * Math.PI * 2 + ringPhase * (i % 2 ? 1 : -0.6);
+    const wob = Math.sin(ringPhase * 1.7 + i * 2.4);
+    const rr = R + wob * spread;
+    const x = cx + rr * Math.cos(a), y = cy + rr * Math.sin(a);
+    const o = (0.25 + 0.55 * (1 - Math.abs(wob))).toFixed(2);
+    dots += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="1.1" fill="#65D6D3" opacity="' + o + '"/>';
+  }
+  svg.innerHTML =
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" stroke="#65D6D3" stroke-width="0.6" opacity="' +
+    (0.5 - t * 0.34).toFixed(2) + '"/>' + dots;
+}
+
+function drawEngineViz(dt) {
+  const svg = $('engineviz');
+  let d1 = '', d2 = '';
+  for (let i = 0; i <= 40; i++) {
+    const x = (i / 40) * 170;
+    const y1 = 32 + Math.sin(i * 0.32 + ringPhase * 1.2) * 11 * Math.exp(-Math.pow((i - 20) / 16, 2));
+    const y2 = 32 + Math.sin(i * 0.32 + ringPhase * 1.2 + 1.9) * 8 * Math.exp(-Math.pow((i - 20) / 16, 2));
+    d1 += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y1.toFixed(1);
+    d2 += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y2.toFixed(1);
+  }
+  svg.innerHTML = '<path d="' + d1 + '" fill="none" stroke="#65D6D3" stroke-width="1" opacity="0.65"/>' +
+                  '<path d="' + d2 + '" fill="none" stroke="#65D6D3" stroke-width="0.8" opacity="0.3"/>' +
+                  '<circle cx="85" cy="32" r="2" fill="#65D6D3"/>';
+}
+
+/* ---------- sweeping cursor ---------- */
+
+let cursorPos = 0;
+const SWEEP_SAMPLES_PER_SEC = 14;
+
+function paintCursor(i) {
+  const exp = view.experimental;
+  if (!exp) return;
+  // Always the last evaluate: a commit_success carries parameters but not the
+  // curve, so reading off it blanks the readout exactly when the run finishes.
+  const src = latestEval();
+  const pred = src && src.predicted_stress_mpa ? src.predicted_stress_mpa : null;
+  const eps = exp.strain[i], meas = exp.stress_mpa[i];
+  const model = pred && i < pred.length ? pred[i] : null;
+  const res = model === null ? null : model - meas;
+
+  $('c-eps').textContent = eps.toFixed(5);
+  $('c-meas').textContent = meas.toFixed(1) + ' MPa';
+  $('c-model').textContent = model === null ? '—' : model.toFixed(1) + ' MPa';
+  $('c-res').textContent = res === null ? '—' : (res >= 0 ? '+' : '') + res.toFixed(1) + ' MPa';
+  $('c-res').classList.toggle('warn', res !== null && Math.abs(res) > 25);
+
+  const rg = regimes(activeParams(), Math.max.apply(null, exp.strain));
+  const peak = exp.strain.indexOf(Math.max.apply(null, exp.strain));
+  let label = '—';
+  if (rg) {
+    if (i <= peak) label = eps < rg.eps1 ? 'Elastic (A)' : eps <= rg.eps2 ? 'Forward plateau' : 'Post-transform (M)';
+    else label = (eps >= rg.eps4 && eps <= rg.eps3) ? 'Reverse plateau' : 'Elastic (A)';
+  }
+  $('c-reg').textContent = label;
+
+  const tab = $('rawtab');
+  if (tab && tab.offsetParent) {
+    let h = '<tr><td>#</td><td>ε · σ MEAS · σ MODEL</td></tr>';
+    for (let k = i - 3; k <= i + 3; k++) {
+      if (k < 0 || k >= exp.strain.length) continue;
+      const m = pred && k < pred.length ? pred[k].toFixed(1) : '—';
+      h += '<tr' + (k === i ? ' style="color:#65D6D3"' : '') + '><td>' + k + '</td><td>' +
+           exp.strain[k].toFixed(5) + ' · ' + exp.stress_mpa[k].toFixed(1) + ' · ' + m + '</td></tr>';
+    }
+    tab.innerHTML = h;
+  }
+
+  const line = document.getElementById('sweep');
+  if (line && chartGeom) {
+    const x = chartGeom.px(eps);
+    line.setAttribute('x1', x.toFixed(1)); line.setAttribute('x2', x.toFixed(1));
+    line.setAttribute('y1', chartGeom.top); line.setAttribute('y2', chartGeom.bottom);
+    line.setAttribute('opacity', '0.45');
+  }
+}
+
+let prevFrame = performance.now();
+function frame(now) {
+  const dt = Math.min((now - prevFrame) / 1000, 0.1);
+  prevFrame = now;
+  drawParticles(dt);
+  drawEngineViz(dt);
+  const n = view.experimental && view.experimental.strain ? view.experimental.strain.length : 0;
+  if (n) { cursorPos = (cursorPos + SWEEP_SAMPLES_PER_SEC * dt) % n; paintCursor(Math.floor(cursorPos)); }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- panels ---------- */
+
+function drawChecks() {
+  const p = activeParams(), e = latestEval();
+  const rmsePct = view.committed ? view.committed.rmse_pct_of_peak : (e ? e.rmse_pct_of_peak : null);
+  const epsMax = view.experimental ? Math.max.apply(null, view.experimental.strain) : null;
+  const rows = [];
+  const add = (s, m, w) => rows.push({ s, m, w });
+
+  if (!p) add('idle', '· · ·', 'Awaiting the first evaluation');
+  else {
+    const ordered = p.sig_AS_f > p.sig_AS_s && p.sig_AS_s > p.sig_SA_s && p.sig_SA_s > p.sig_SA_f && p.sig_SA_f > 0;
+    add(ordered ? 'pass' : 'fail', ordered ? 'PASS' : 'FAIL', 'Hysteresis dissipates energy — <em>σAS_f > σAS_s > σSA_s > σSA_f > 0</em>');
+    const epsOk = p.eps_L > 0 && p.eps_L <= 0.15;
+    add(epsOk ? 'pass' : 'fail', epsOk ? 'PASS' : 'FAIL', 'Transformation strain in range — <em>0 < ε_L ≤ 0.15</em>');
+    const rg = regimes(p, epsMax || 0.065);
+    const fits = epsMax !== null && rg && epsMax > rg.eps2;
+    add(fits ? 'pass' : 'fail', fits ? 'PASS' : 'FAIL', 'Transformation completes inside the test — <em>ε_max > ε2</em>');
+    if (rmsePct === null) add('idle', '· · ·', 'Fit quality not yet measured');
+    else {
+      const ok = rmsePct <= PASS_PCT;
+      add(ok ? 'pass' : 'fail', ok ? 'PASS' : 'FAIL', 'Residual under the bar — <em>' + rmsePct.toFixed(2) + '% ≤ ' + PASS_PCT.toFixed(2) + '%</em>');
+    }
+    const stiff = p.E_A > p.E_M;
+    add(stiff ? 'pass' : 'warn', stiff ? 'PASS' : 'WARN', 'Austenite stiffer than martensite — <em>E_A > E_M</em>' + (stiff ? '' : ' · flagged, not blocked'));
+  }
+  const signed = !!view.committed;
+  add(signed ? 'pass' : 'idle', signed ? 'PASS' : '· · ·',
+      signed ? 'Justification supplied and human approved' : 'Human approval — held by TrueForge');
+
+  $('checks').innerHTML = rows.map(r => '<li class="' + r.s + '"><span class="mk">' + r.m + '</span><span class="wt">' + r.w + '</span></li>').join('');
+}
+
+function drawSource() {
+  const exp = view.experimental, n = exp && exp.strain ? exp.strain.length : 0;
+  $('ds-name').textContent = n ? 'SMA_Tension_01 · ' + n + ' points' : 'no dataset';
+  const rows = [
+    ['SPECIMEN', 'NiTi · superelastic'], ['PROTOCOL', 'uniaxial load–unload'], ['CYCLES', '1'],
+    ['ε RANGE', n ? '0 → ' + Math.max.apply(null, exp.strain).toFixed(3) + ' → 0' : '—'],
+    ['σ PEAK', n ? Math.max.apply(null, exp.stress_mpa).toFixed(1) + ' MPa' : '—'],
+    ['SAMPLES', n || '—'], ['REVERSAL', n ? '#' + exp.strain.indexOf(Math.max.apply(null, exp.strain)) : '—'],
+    ['ORIGIN', 'synthetic · seeded'], ['NOISE', '3% of σ + 2 MPa'], ['STATUS', n ? 'valid' : '—'],
+  ];
+  $('srcmeta').innerHTML = rows.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
+}
+
+function drawResults() {
+  const c = view.committed;
+  $('res-state').textContent = c ? 'committed' : 'not committed';
+  if (!c) {
+    $('resulttab').innerHTML = '<tr><td>—</td><td>no material card written</td></tr>';
+    $('res-just').textContent = '';
+    return;
+  }
+  const rows = PARAMS.map(([k, d, u, , , dp]) => ['<span style="color:#DCE7EE">' + k + '</span> · ' + d, c.params[k].toFixed(dp) + (u ? ' ' + u : '')]);
+  rows.push(['RMSE', c.rmse_mpa + ' MPa · ' + c.rmse_pct_of_peak + '% of peak']);
+  rows.push(['COMMITTED', (c.committed_at_utc || '').replace('T', ' ').slice(0, 19) + ' UTC']);
+  if (c.warnings && c.warnings.length) rows.push(['WARNINGS', c.warnings.length]);
+  $('resulttab').innerHTML = rows.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
+  $('res-just').innerHTML = '<b>Justification:</b> ' + (c.justification || '—');
+}
+
+const EVENT_LABEL = {
+  evaluate: 'Model Evaluation',
+  commit_success: 'Calibration Committed',
+  commit_attempt: 'Commit Rejected',
+};
+
+function drawLog() {
+  const hist = view.rawHistory || [];
+  $('logcount').textContent = hist.length + ' events';
+  const rows = hist.slice(-40).reverse().map((e, idx) => {
+    const at = Date.parse(e.at_utc || e.committed_at_utc);
+    const t = isNaN(at) ? '--:--:--' : new Date(at).toTimeString().slice(0, 8);
+    let cls = '', detail;
+    if (e.type === 'evaluate') {
+      detail = 'Iteration ' + (hist.filter((x, i) => x.type === 'evaluate' && i <= hist.indexOf(e)).length) +
+               ' — cost ' + e.rmse_pct_of_peak.toFixed(2) + '% of peak';
+    } else if (e.type === 'commit_success') {
+      cls = 'ok'; detail = 'Signed off at ' + e.rmse_pct_of_peak.toFixed(2) + '% — material card written';
+    } else { cls = 'bad'; detail = e.reason || 'refused'; }
+    return '<tr class="' + cls + '"><td class="t">' + t + '</td><td class="ev">' +
+           (EVENT_LABEL[e.type] || e.type) + '</td><td>' + detail + '</td></tr>';
+  });
+  $('logbody').innerHTML = rows.join('') ||
+    '<tr><td class="t">--:--:--</td><td class="ev">Idle</td><td>awaiting first tool call</td></tr>';
+}
+
+/* ---------- render ---------- */
+
+const STATE_LABEL = {
+  offline: ['No Signal', ''], idle: ['Idle', ''], solving: ['Solving', 'run'],
+  holding: ['Awaiting Approval', 'hold'], rejected: ['Commit Refused', 'hold'],
+  committed: ['Converged', 'done'],
 };
 
 function fmtElapsed(ms) {
-  if (ms == null || ms < 0) return '—:—';
+  if (ms == null || ms < 0) return '—';
   const s = Math.floor(ms / 1000);
-  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  return String(Math.floor(s / 3600)).padStart(2, '0') + ':' +
+         String(Math.floor(s / 60) % 60).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
 }
 
 function render() {
   const st = status();
 
-  const link = $('link');
-  link.className = 'link ' + (view.linked ? 'on' : 'off');
-  $('link-text').textContent = view.linked ? 'LINKED :8001' : 'NO SIGNAL :8001';
+  for (const el of [$('live'), $('live2')]) el.className = 'live' + (view.linked ? '' : ' off');
+  $('live-text').textContent = view.linked ? 'CONNECTED' : 'NO SIGNAL';
+  $('b-sync').className = 'sync' + (view.linked ? '' : ' off');
+  $('b-synctext').textContent = view.linked ? 'Synced' : 'Disconnected';
+  $('eng-stat').className = 'stat' + (view.linked ? '' : ' down');
+  $('eng-stat').lastElementChild.textContent = view.linked ? 'All Systems Operational' : 'Feed Unreachable';
 
-  $('m-iter').textContent = view.evals.length ? String(view.evals.length).padStart(2, '0') : '—';
-  $('m-elapsed').textContent = view.firstAt ? fmtElapsed(view.lastAt - view.firstAt) : '—:—';
+  const r = currentRmse(), fit = $('fit');
+  if (r == null) { fit.innerHTML = '——<small>%</small>'; fit.className = 'fitval stale'; }
+  else { fit.innerHTML = r.toFixed(2) + '<small>%</small>'; fit.className = 'fitval'; }
 
-  const rm = $('h-rmse'), r = currentRmse();
-  if (r == null) {
-    rm.innerHTML = '——<small>%</small>';
-    rm.className = 'hval stale';
-    rm.style.color = '';
-  } else {
-    rm.innerHTML = r.toFixed(2) + '<small>%</small>';
-    rm.className = 'hval';
-    rm.style.color = r <= PASS_PCT ? '#6FA8A3' : '#E8E5DE';
-  }
-
-  const dEl = $('h-delta');
+  const d = $('fitdelta');
   if (view.evals.length >= 2) {
-    const d = r - view.evals[view.evals.length - 2].rmse_pct_of_peak;
-    dEl.textContent = (d <= 0 ? '▼ ' : '▲ ') + Math.abs(d).toFixed(2) + ' pt vs. prev';
-    dEl.className = 'hdelta ' + (d <= 0 ? 'down' : 'up');
-  } else {
-    dEl.textContent = view.evals.length ? 'first evaluation' : 'awaiting first evaluation';
-    dEl.className = 'hdelta';
-  }
+    const diff = r - view.evals[view.evals.length - 2].rmse_pct_of_peak;
+    d.textContent = (diff <= 0 ? '▼ ' : '▲ ') + Math.abs(diff).toFixed(2) + ' pt vs. previous';
+    d.className = 'fitdelta ' + (diff <= 0 ? 'down' : 'up');
+  } else { d.textContent = view.evals.length ? 'first evaluation' : 'awaiting first evaluation'; d.className = 'fitdelta'; }
 
   const exp = view.experimental;
   const peak = exp && exp.stress_mpa ? Math.max.apply(null, exp.stress_mpa) : null;
   const src = view.committed || latestEval();
-  // Only commit events carry rmse_mpa; for an evaluate it is recovered from the
-  // percentage, which is how the server derived that percentage in the first place.
-  const abs = src && src.rmse_mpa != null ? src.rmse_mpa
-            : (r != null && peak != null ? r / 100 * peak : null);
-  $('h-abs').textContent = abs != null ? abs.toFixed(2) + ' MPa' : '—';
-  $('h-peak').textContent = peak != null ? peak.toFixed(0) + ' MPa' : '—';
-  $('h-pts').textContent = exp && exp.strain ? exp.strain.length : '—';
+  const abs = src && src.rmse_mpa != null ? src.rmse_mpa : (r != null && peak != null ? r / 100 * peak : null);
+  $('m-abs').textContent = abs != null ? abs.toFixed(2) + ' MPa' : '—';
+  $('m-peak').textContent = peak != null ? peak.toFixed(0) + ' MPa' : '—';
+  $('m-pts').textContent = exp && exp.strain ? exp.strain.length : '—';
 
-  const spec = BANNERS[st];
-  $('banner').className = 'banner ' + spec[1];
-  $('banner-text').textContent = spec[0];
+  const [label, cls] = STATE_LABEL[st];
+  $('s-state').textContent = label; $('s-state').className = cls;
+  $('s-iter').textContent = view.evals.length ? String(view.evals.length) : '—';
+  $('s-elapsed').textContent = view.firstAt ? fmtElapsed(view.lastAt - view.firstAt) : '—';
+  const best = bestRmse();
+  $('s-best').textContent = isFinite(best) ? best.toFixed(2) + ' %' : '—';
 
-  let sub = spec[2];
-  if (st === 'rejected' && view.reject) sub = (view.reject.reason || '').slice(0, 44);
-  else if (st === 'committed' && view.committed) sub = view.committed.rmse_pct_of_peak.toFixed(2) + '% · signed off';
-  else if (st === 'searching') sub = view.evals.length + ' evals · coordinate descent';
-  $('banner-sub').textContent = sub;
+  $('gatenote').innerHTML = st === 'holding'
+    ? '<b style="color:#D9A15B">Inferred, not observed.</b> A converged fit has gone quiet, which usually means TrueForge is holding <span class="mono">commit_calibration</span> for sign-off — but this feed carries no approval signal, so the state is a guess.'
+    : '<b>Approval is held by TrueForge, not here.</b> <span class="mono">commit_calibration</span> is annotated destructive, so the harness pauses it before its body runs — this window sees a commit only once a human has signed off.';
 
-  drawLog();
-  drawChecks();
-  drawSource();
-  drawChart();
-  drawResidual();
-  drawGauges();
-  drawSpark();
+  drawLog(); drawChecks(); drawSource(); drawResults();
+  drawChart(); drawResidual(); drawParams(); drawConv();
+  if (!$('errm').closest('.card').classList.contains('hidden')) drawErrorMetrics();
+  if (!$('sens').closest('.card').classList.contains('hidden')) drawSensitivity();
 }
 
-// Mirrors what commit_calibration enforces in server.py, so the panel shows the
-// bar the run is actually being held to rather than a restatement of it.
-function drawChecks() {
-  const p = view.committed ? view.committed.params : (latestEval() || {}).params;
-  const e = latestEval();
-  const rmsePct = view.committed ? view.committed.rmse_pct_of_peak : (e ? e.rmse_pct_of_peak : null);
-  const epsMax = view.experimental ? Math.max.apply(null, view.experimental.strain) : null;
+/* ---------- navigation ---------- */
 
-  const rows = [];
-  const add = (state, mark, what) => rows.push({ state, mark, what });
+const NAV_TO_TAB = { dashboard: 'response', parameters: 'parameters', experiments: 'experiments',
+                     solver: 'solver', results: 'results', console: 'console' };
 
-  if (!p) {
-    add('idle', '· · ·', 'Awaiting the first evaluation');
-  } else {
-    const ordered = p.sig_AS_f > p.sig_AS_s && p.sig_AS_s > p.sig_SA_s && p.sig_SA_s > p.sig_SA_f && p.sig_SA_f > 0;
-    add(ordered ? 'pass' : 'fail', ordered ? 'PASS' : 'FAIL',
-        'Hysteresis dissipates energy — <em>σAS_f > σAS_s > σSA_s > σSA_f > 0</em>');
-
-    const epsOk = p.eps_L > 0 && p.eps_L <= 0.15;
-    add(epsOk ? 'pass' : 'fail', epsOk ? 'PASS' : 'FAIL',
-        'Transformation strain within reach — <em>0 < ε_L ≤ 0.15</em>');
-
-    const rg = regimes(p, epsMax || 0.065);
-    const fits = epsMax !== null && rg && epsMax > rg.eps2;
-    add(fits ? 'pass' : 'fail', fits ? 'PASS' : 'FAIL',
-        'Transformation completes inside the test range — <em>ε_max > ε2</em>');
-
-    if (rmsePct === null) add('idle', '· · ·', 'Fit quality not yet measured');
-    else {
-      const ok = rmsePct <= PASS_PCT;
-      add(ok ? 'pass' : 'fail', ok ? 'PASS' : 'FAIL',
-          'Residual under the bar — <em>' + rmsePct.toFixed(2) + '% ≤ ' + PASS_PCT.toFixed(2) + '% of peak</em>');
-    }
-
-    const stiff = p.E_A > p.E_M;
-    add(stiff ? 'pass' : 'warn', stiff ? 'PASS' : 'WARN',
-        'Austenite stiffer than martensite — <em>E_A > E_M</em>' +
-        (stiff ? '' : ' · unusual for NiTi, flagged not blocked'));
+function showPanes(key) {
+  for (const card of document.querySelectorAll('[data-pane]')) {
+    card.classList.toggle('hidden', !card.dataset.pane.split(' ').includes(key));
   }
-
-  const signed = !!view.committed;
-  add(signed ? 'pass' : 'idle', signed ? 'PASS' : '· · ·',
-      signed ? 'Justification supplied and human approved'
-             : 'Human approval — held by TrueForge, not observable here');
-
-  $('checks').innerHTML = rows.map(r =>
-    '<li class="' + r.state + '"><span class="mark">' + r.mark + '</span>' +
-    '<span class="what">' + r.what + '</span></li>').join('');
+  requestAnimationFrame(render);
 }
 
-function drawSource() {
-  const exp = view.experimental;
-  const n = exp && exp.strain ? exp.strain.length : 0;
-  const rows = [
-    ['SPECIMEN', 'NiTi · superelastic'],
-    ['PROTOCOL', 'uniaxial load–unload'],
-    ['CYCLES', '1'],
-    ['ε RANGE', n ? '0 → ' + Math.max.apply(null, exp.strain).toFixed(3) + ' → 0' : '—'],
-    ['σ PEAK', n ? Math.max.apply(null, exp.stress_mpa).toFixed(1) + ' MPa' : '—'],
-    ['SAMPLES', n || '—'],
-    ['REVERSAL', n ? '#' + exp.strain.indexOf(Math.max.apply(null, exp.strain)) : '—'],
-    ['ORIGIN', 'synthetic · seeded'],
-    ['NOISE', '3% of σ + 2 MPa'],
-    ['FEED', ':8001/progress'],
-  ];
-  $('srcmeta').innerHTML = rows.map(r =>
-    '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('');
-}
+document.querySelector('.nav').addEventListener('click', ev => {
+  const b = ev.target.closest('.navitem'); if (!b || b.classList.contains('off')) return;
+  for (const n of document.querySelectorAll('.navitem')) n.classList.toggle('on', n === b);
+  const key = NAV_TO_TAB[b.dataset.view];
+  for (const t of $('wstabs').children) t.classList.toggle('on', t.dataset.tab === 'response' && key === 'response');
+  showPanes(key);
+});
 
-const LOG_ROWS = 7;
+$('wstabs').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  for (const t of $('wstabs').children) t.classList.toggle('on', t === b);
+  for (const n of document.querySelectorAll('.navitem')) n.classList.toggle('on', n.dataset.view === 'dashboard');
+  showPanes(b.dataset.tab);
+});
 
-function drawLog() {
-  const hist = view.rawHistory || [];
-  const rows = hist.slice(-LOG_ROWS).reverse().map(e => {
-    const at = Date.parse(e.at_utc || e.committed_at_utc);
-    const t = isNaN(at) ? '--:--:--' : new Date(at).toTimeString().slice(0, 8);
-    if (e.type === 'evaluate') {
-      return ['', t, 'evaluate_model  ' + e.rmse_pct_of_peak.toFixed(2) + '%'];
+// The button starts the same run_agent.py a terminal would; the harness still
+// holds the commit for approval, so this cannot push anything through the gate.
+$('run').addEventListener('click', async () => {
+  const b = $('run');
+  b.disabled = true; b.textContent = '▶ STARTING…';
+  try {
+    const r = await fetch('/run', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    b.textContent = r.ok ? '▶ SOLVER RUNNING' : '▶ ' + (j.error || 'UNAVAILABLE');
+  } catch { b.textContent = '▶ UNAVAILABLE'; }
+  setTimeout(() => { b.disabled = false; b.textContent = '▶ RUN SOLVER'; }, 6000);
+});
+
+/* ---------- approval handshake ---------- */
+// The agent publishes the pending call and blocks; nothing here approves on its
+// own, and a run started from the RUN button waits exactly as a terminal one does.
+
+let pendingId = null;
+
+async function pollPending() {
+  try {
+    const p = await (await fetch('/pending', { cache: 'no-store' })).json();
+    const live = p && p.tool_call_id;
+    $('approval').classList.toggle('hidden', !live);
+    if (live && p.tool_call_id !== pendingId) {
+      pendingId = p.tool_call_id;
+      $('ap-tool').textContent = p.tool || 'commit_calibration';
+      $('ap-id').textContent = String(p.tool_call_id).slice(0, 18);
+      $('ap-at').textContent = p.asked_at || '—';
+      for (const b of [$('ap-allow'), $('ap-deny')]) { b.disabled = false; }
+      $('ap-allow').textContent = 'APPROVE';
+      $('ap-deny').textContent = 'DENY';
     }
-    if (e.type === 'commit_success') {
-      return ['ok', t, 'commit_calibration  signed off'];
-    }
-    return ['bad', t, 'commit rejected  ' + (e.reason || '').slice(0, 26)];
-  });
-  if (!rows.length) rows.push(['', '--:--:--', 'awaiting first tool call']);
-  $('log').innerHTML = rows.map(r =>
-    '<li class="' + r[0] + '"><b>' + r[1] + '</b>' + r[2] + '</li>').join('');
+    if (!live) pendingId = null;
+  } catch {
+    $('approval').classList.add('hidden');
+  }
 }
+
+async function decideFromUi(status) {
+  for (const b of [$('ap-allow'), $('ap-deny')]) b.disabled = true;
+  $(status === 'allow' ? 'ap-allow' : 'ap-deny').textContent = 'SENDING…';
+  try {
+    await fetch('/decide', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+  } catch {
+    for (const b of [$('ap-allow'), $('ap-deny')]) b.disabled = false;
+  }
+}
+
+$('ap-allow').addEventListener('click', () => decideFromUi('allow'));
+$('ap-deny').addEventListener('click', () => decideFromUi('deny'));
+
+/* ---------- boot ---------- */
 
 let resizeTimer;
-addEventListener('resize', () => {
-  clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { buildWheel(); render(); }, 120);
-});
-
-// The SVGs are drawn in real pixels, so they have to be redrawn whenever their
-// box changes -- not just on window resize. The web fonts land after first
-// paint and reflow the panels, which would otherwise leave the chart drawn to
-// a stale height for the rest of the session.
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 120); });
 if (window.ResizeObserver) {
   let pending;
-  const ro = new ResizeObserver(() => {
-    clearTimeout(pending);
-    pending = setTimeout(render, 60);
-  });
-  ro.observe(chartSvg.parentElement);
-  ro.observe(residSvg.parentElement);
-  ro.observe(sparkSvg.parentElement);
+  const ro = new ResizeObserver(() => { clearTimeout(pending); pending = setTimeout(render, 60); });
+  for (const id of ['chart', 'resid', 'conv']) ro.observe($(id));
 }
 
-const TABS = ['trace', 'checks', 'source'];
+fetch('/meta').then(r => r.json()).then(m => {
+  if (m.model) { $('sel-model').firstChild.textContent = m.model; $('b-model').textContent = m.model; }
+  if (m.version) $('eng-ver').textContent = 'v' + m.version;
+}).catch(() => {});
 
-function showTab(name) {
-  if (!TABS.includes(name)) return;
-  for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.tab === name);
-  for (const t of TABS) $('pane-' + t).classList.toggle('on', t === name);
-}
-
-$('tabs').addEventListener('click', ev => {
-  const btn = ev.target.closest('button[data-tab]');
-  if (btn) { showTab(btn.dataset.tab); location.hash = btn.dataset.tab; }
-});
-addEventListener('hashchange', () => showTab(location.hash.slice(1)));
-if (location.hash) showTab(location.hash.slice(1));
-
-buildWheel();
-buildGauges();
+buildParams();
 render();
-requestAnimationFrame(spinFrame);
+requestAnimationFrame(frame);
 poll();
 setInterval(poll, POLL_MS);
+pollPending();
+setInterval(pollPending, 900);
 </script>
 </body>
 </html>

@@ -28,6 +28,9 @@ Serves http://localhost:8001
 """
 
 import json
+import subprocess
+import sys
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -35,6 +38,29 @@ PORT = 8001
 HERE = Path(__file__).parent
 PROGRESS_PATH = HERE / "progress_state.json"
 DASHBOARD_PATH = HERE / "dashboard.html"
+TRUEFORGE = "http://localhost:8790"
+
+# Handshake files run_agent.py uses when it has no terminal to ask at: it writes
+# the pending tool call, then waits for a decision written here.
+PENDING_PATH = HERE / "approval_pending.json"
+DECISION_PATH = HERE / "approval_decision.json"
+
+# The one process POST /run is allowed to start, if it isn't already running.
+_agent: "subprocess.Popen | None" = None
+
+
+def _meta() -> dict:
+    """Model and harness details for the header. Best-effort: the dashboard is
+    still usable when TrueForge is down, so a failure here is not an error."""
+    out = {"version": "0.1.0", "model": None, "agent_running": _agent is not None and _agent.poll() is None}
+    try:
+        with urllib.request.urlopen(f"{TRUEFORGE}/api/v1/models", timeout=3) as r:
+            models = json.loads(r.read()).get("data", [])
+            if models:
+                out["model"] = models[0].get("name")
+    except Exception:
+        pass
+    return out
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -76,8 +102,57 @@ class Handler(BaseHTTPRequestHandler):
                 "has_progress": PROGRESS_PATH.exists(),
             }).encode(), "application/json")
 
+        elif route == "/meta":
+            self._send(200, json.dumps(_meta()).encode(), "application/json")
+
+        elif route == "/pending":
+            body = PENDING_PATH.read_bytes() if PENDING_PATH.exists() else b"{}"
+            self._send(200, body, "application/json")
+
         else:
             self._send(404, b"not found -- try / or /progress")
+
+    def do_POST(self):
+        global _agent
+        route = self.path.split("?")[0]
+
+        if route == "/decide":
+            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                want = json.loads(self.rfile.read(n) or b"{}").get("status")
+            except json.JSONDecodeError:
+                want = None
+            if want not in ("allow", "deny"):
+                self._send(400, json.dumps({"error": "status must be allow or deny"}).encode(), "application/json")
+                return
+            DECISION_PATH.write_text(json.dumps({"status": want}))
+            self._send(200, json.dumps({"recorded": want}).encode(), "application/json")
+            return
+
+        if route != "/run":
+            self._send(404, b"not found")
+            return
+
+        # Bound to 127.0.0.1, takes nothing from the request, and runs one fixed
+        # argv -- the button is a convenience, not an arbitrary exec surface.
+        # Deliberately no --auto-approve: started this way the agent still stops
+        # at commit_calibration and waits for a decision posted to /decide, so
+        # the button cannot push anything through the gate.
+        if _agent is not None and _agent.poll() is None:
+            self._send(409, json.dumps({"error": "already running"}).encode(), "application/json")
+            return
+        PENDING_PATH.unlink(missing_ok=True)
+        DECISION_PATH.unlink(missing_ok=True)
+        try:
+            _agent = subprocess.Popen(
+                [sys.executable, str(HERE / "run_agent.py")],
+                cwd=str(HERE),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+        except OSError as e:
+            self._send(500, json.dumps({"error": str(e)[:120]}).encode(), "application/json")
+            return
+        self._send(202, json.dumps({"started": True, "pid": _agent.pid}).encode(), "application/json")
 
     def log_message(self, fmt, *args):
         pass  # keep the terminal quiet during a live demo

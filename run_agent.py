@@ -28,8 +28,10 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 BASE = os.environ.get("TRUEFORGE_URL", "http://localhost:8790")
 API = f"{BASE}/api/v1"
@@ -191,6 +193,45 @@ def describe(ev: dict) -> str | None:
     return None
 
 
+HERE = Path(__file__).parent
+PENDING_PATH = HERE / "approval_pending.json"
+DECISION_PATH = HERE / "approval_decision.json"
+
+
+def wait_for_dashboard(ev: dict, timeout_s: int = 600) -> dict:
+    """Publish the pending call and block until someone decides in the dashboard.
+
+    Started from the RUN button there is no terminal to prompt at, and defaulting
+    to approve would mean the button quietly waived the gate it exists to
+    demonstrate. So the wait is real: nothing proceeds until a decision arrives.
+    """
+    PENDING_PATH.write_text(json.dumps({
+        "thread_id": ev.get("thread_id"),
+        "tool_call_id": ev["tool_calls"][0]["id"],
+        "tool": "commit_calibration",
+        "asked_at": time.strftime("%H:%M:%S"),
+    }))
+    print("  waiting for a decision in the dashboard...", flush=True)
+    deadline = time.time() + timeout_s
+    try:
+        while time.time() < deadline:
+            if DECISION_PATH.exists():
+                try:
+                    want = json.loads(DECISION_PATH.read_text()).get("status")
+                except json.JSONDecodeError:
+                    want = None
+                if want in ("allow", "deny"):
+                    DECISION_PATH.unlink(missing_ok=True)
+                    print(f"  dashboard said: {want}\n")
+                    return ({"status": "allow"} if want == "allow"
+                            else {"status": "deny", "reason": "Denied by the reviewer in the dashboard."})
+            time.sleep(0.4)
+        print("  no decision within the timeout -- denying\n")
+        return {"status": "deny", "reason": "No human decision was given before the request timed out."}
+    finally:
+        PENDING_PATH.unlink(missing_ok=True)
+
+
 def decide(ev: dict, args) -> dict:
     calls = ev.get("tool_calls", [])
     print("\n" + "=" * 66)
@@ -206,6 +247,8 @@ def decide(ev: dict, args) -> dict:
     if args.deny:
         print("  --deny: refusing\n")
         return {"status": "deny", "reason": "Denied by run_agent.py --deny"}
+    if not sys.stdin.isatty():
+        return wait_for_dashboard(ev)
 
     while True:
         answer = input("  allow this irreversible commit? [y/N] ").strip().lower()

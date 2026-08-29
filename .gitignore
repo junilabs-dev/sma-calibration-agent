@@ -12,3 +12,5 @@ __pycache__/
 progress_state.json
 calibrated_material_card.json
 .logs/
+approval_pending.json
+approval_decision.json
