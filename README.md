@@ -575,3 +575,29 @@ data and commit the result once you're confident in it."* Then watch it call
 | `run_trueforge.ps1` | starts TrueForge with all state pinned inside this folder |
 | `scripts/patch-kysely-esm.mjs` | Windows ESM-loader fix, applied on `npm install` |
 | `requirements.txt` | fastmcp, numpy |
+
+## Thanks
+
+To **[WeMakeDevs](https://www.wemakedevs.org)** for running the Agent Harness
+Hackathon, and to **[TrueFoundry](https://trueforge.dev)** for building TrueForge
+and making it open source.
+
+The harness is the reason this project exists in the form it does. The agent
+loop, MCP discovery and dispatch, session state, and — the part that mattered
+most here — the approval gate are all TrueForge's. Being able to annotate one
+tool as destructive and have the runtime hold it before its body executes is
+what turned "an optimiser that writes a material card" into something a person
+would actually let near their data. I did not have to build any of that, which
+is why a week was enough.
+
+Two things I found along the way are written up above rather than filed away:
+TrueForge does not currently start on Windows because of an upstream `import()`
+bug in kysely, and the approvals contract is clearer from the OpenAPI schema
+than from the docs. The fix for the first is in `scripts/patch-kysely-esm.mjs`
+and is offered back to anyone who hits it.
+
+The requirement that every substantive change go through a Qodo-reviewed pull
+request also earned its place. It caught two real bugs I would have shipped — an
+over-broad process kill, and a residual statistic averaged across regimes
+governed by different parameters, which had been quietly steering the search
+toward the wrong parameter.
