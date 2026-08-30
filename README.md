@@ -64,18 +64,32 @@ driven by a model that reads the residual and decides what to change next.
         └─────────────────────────────────────────────────────┘
 ```
 
-The same run can be started from either end — the workstation's RUN SOLVER
-button or TrueForge's own chat — because both go through the harness.
-`run_agent.py` is what wires them together, registering the agent, opening a
-session and streaming turns over the HTTP API. The only difference between the
-two is where the approval prompt appears.
+The run can be started from either end, and the gate holds either way, but the
+two paths are not the same underneath:
+
+- **The workstation's RUN SOLVER button** launches `run_agent.py`, which
+  registers the agent, opens a session and streams turns over TrueForge's HTTP
+  API. The approval is relayed back through the dashboard.
+- **TrueForge's own chat** drives the agent inside the harness itself.
+  `run_agent.py` is not involved at all, and the approval is answered in
+  TrueForge's UI.
+
+`run_agent.py` is therefore one client of the harness, not a layer everything
+passes through — which is the point of it: the same agent is reachable from the
+harness's own interface and from code.
 
 **The gate, precisely.** `commit_calibration` is annotated `destructiveHint` in
 the MCP server. The agent's MCP entry sets
 `require_approval_for_tools: ["@destructive"]`. TrueForge matches the annotation,
 emits `tool.approval_required`, and stops the tool **before its Python body
-runs**. Nothing continues until a `user.tool_approval` decision is posted back,
-and no decision is not an approval — the wait times out into a denial.
+runs**. Nothing continues until a `user.tool_approval` decision is posted back.
+
+How a missing decision is treated depends on which path you are on. Started from
+the dashboard, `run_agent.py` waits ten minutes and then **denies** — an
+unanswered prompt must not become an approval when nobody is watching the
+terminal. Run interactively it blocks at the prompt indefinitely, which is the
+right behaviour when a person is sat in front of it. Driven from TrueForge's
+chat, the wait is the harness's own.
 
 ## Where this came from
 
