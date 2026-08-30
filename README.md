@@ -596,13 +596,21 @@ To **[WeMakeDevs](https://www.wemakedevs.org)** for running the Agent Harness
 Hackathon, and to **[TrueFoundry](https://trueforge.dev)** for building TrueForge
 and making it open source.
 
-The harness is the reason this project exists in the form it does. The agent
-loop, MCP discovery and dispatch, session state, and — the part that mattered
-most here — the approval gate are all TrueForge's. Being able to annotate one
-tool as destructive and have the runtime hold it before its body executes is
-what turned "an optimiser that writes a material card" into something a person
-would actually let near their data. I did not have to build any of that, which
-is why a week was enough.
+Work like this normally stays where mine has been for a year — in scripts and
+notebooks, half-finished, shown to nobody. Solving an inverse problem is
+satisfying on its own, so there is never much pressure to turn it into something
+another person could pick up and run. What a hackathon gives you is a reason to
+finish, and a room where the finished thing gets looked at. For a mechanical
+engineering student trying to move toward computational work, that is not a
+small thing, and it is why the week was worth it regardless of how the judging
+goes.
+
+TrueForge is why a week was enough. The agent loop, MCP discovery and dispatch,
+session state, and — the part that mattered most here — the approval gate are
+all the harness's. I wrote the physics and the interface; TrueForge ran an agent
+over them. Being able to annotate one tool as destructive and have the runtime
+hold it before its body executes is what turned "an optimiser that writes a
+material card" into something I would let near real data.
 
 Two things I found along the way are written up above rather than filed away:
 TrueForge does not currently start on Windows because of an upstream `import()`
