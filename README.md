@@ -26,6 +26,95 @@ Seventeen modules are scoped; this one is built. Nothing in this repository
 depends on the others existing, and none of the rest is claimed as working
 software here.
 
+## Architecture
+
+TrueForge is the host. It is what lets a model drive the solver at all: without
+the harness this is a Python module you call by hand; with it, the search is
+driven by a model that reads the residual and decides what to change next.
+
+```
+                    ┌──────────────────────────────┐
+                    │        LLM  (Gemini)         │
+                    └──────────────┬───────────────┘
+                                   │  model calls
+                    ┌──────────────▼───────────────┐
+                    │      TRUEFORGE  :8790        │   ← the host
+                    │  agent loop · sessions ·     │
+                    │  MCP dispatch · APPROVAL GATE│
+                    └───┬──────────────────────┬───┘
+        registers/drives │                      │ tool calls
+                         │                      │
+        ┌────────────────▼──────┐   ┌───────────▼─────────────┐
+        │  run_agent.py         │   │  server.py   :8000/mcp  │
+        │  configure_trueforge  │   │  ┌───────────────────┐  │
+        └────────────┬──────────┘   │  │ get_experimental… │  │
+                     │              │  │ evaluate_model    │  │
+                     │              │  │ commit_calibration│◄─┼── destructiveHint
+                     │              │  └─────────┬─────────┘  │    (gated)
+                     │              └────────────┼────────────┘
+                     │                           │ writes
+                     │              ┌────────────▼────────────┐
+                     │              │  progress_state.json    │
+                     │              │  sma_model.py (physics) │
+                     │              └────────────┬────────────┘
+                     │ approval handshake        │ polled
+        ┌────────────▼───────────────────────────▼────────────┐
+        │        dashboard_api.py  →  NEUTRINO  :8001         │
+        │   charts · gauges · residuals · APPROVE / DENY      │
+        └─────────────────────────────────────────────────────┘
+```
+
+The run can be started from either end, and the gate holds either way, but the
+two paths are not the same underneath:
+
+- **The workstation's RUN SOLVER button** launches `run_agent.py`, which
+  registers the agent, opens a session and streams turns over TrueForge's HTTP
+  API. The approval is relayed back through the dashboard.
+- **TrueForge's own chat** drives the agent inside the harness itself.
+  `run_agent.py` is not involved at all, and the approval is answered in
+  TrueForge's UI.
+
+`run_agent.py` is therefore one client of the harness, not a layer everything
+passes through — which is the point of it: the same agent is reachable from the
+harness's own interface and from code.
+
+**The gate, precisely.** `commit_calibration` is annotated `destructiveHint` in
+the MCP server. The agent's MCP entry sets
+`require_approval_for_tools: ["@destructive"]`. TrueForge matches the annotation,
+emits `tool.approval_required`, and stops the tool **before its Python body
+runs**. Nothing continues until a `user.tool_approval` decision is posted back.
+
+How a missing decision is treated depends on which path you are on. Started from
+the dashboard, `run_agent.py` waits ten minutes and then **denies** — an
+unanswered prompt must not become an approval when nobody is watching the
+terminal. Run interactively it blocks at the prompt indefinitely, which is the
+right behaviour when a person is sat in front of it. Driven from TrueForge's
+chat, the wait is the harness's own.
+
+## Where this came from
+
+NEUTRINO is a prototype, and a deliberate one. The solver framing, the
+parameterisation, the acceptance criteria and the search strategy come from my
+own research work rather than from a library:
+
+- around a year working on inverse solvers, in a **research workflow** — scripts
+  and notebooks, not a product
+- around six months formulating this particular solver framework
+- one to two months building **MODULON**, the wider suite this belongs to
+
+My earlier inverse-solver work targeted a different material problem. NEUTRINO
+uses superelastic NiTi as its test subject and is built against **known data** —
+a synthetic trace generated from a parameter set the agent never sees. For a
+prototype that is the point: the question is whether the search recovers an
+answer you already know, which is exactly what makes the result checkable. The
+[sensitivity analysis](#for-judges--how-to-verify-this-in-5-minutes) below only
+means anything because the truth is available to compare against.
+
+Every MODULON module shares this interface language deliberately. The suite is
+aimed at engineers reading numbers under pressure, so the priorities stay the
+same throughout: dense but organised, every figure traceable to where it came
+from, and nothing on screen the system cannot actually observe.
+
 ## What the agent does, and how it uses TrueForge
 
 **The task.** A tensile test gives you a stress–strain curve. Recovering the
@@ -500,3 +589,29 @@ data and commit the result once you're confident in it."* Then watch it call
 | `run_trueforge.ps1` | starts TrueForge with all state pinned inside this folder |
 | `scripts/patch-kysely-esm.mjs` | Windows ESM-loader fix, applied on `npm install` |
 | `requirements.txt` | fastmcp, numpy |
+
+## Thanks
+
+To **[WeMakeDevs](https://www.wemakedevs.org)** for running the Agent Harness
+Hackathon, and to **[TrueFoundry](https://trueforge.dev)** for building TrueForge
+and making it open source.
+
+The harness is the reason this project exists in the form it does. The agent
+loop, MCP discovery and dispatch, session state, and — the part that mattered
+most here — the approval gate are all TrueForge's. Being able to annotate one
+tool as destructive and have the runtime hold it before its body executes is
+what turned "an optimiser that writes a material card" into something a person
+would actually let near their data. I did not have to build any of that, which
+is why a week was enough.
+
+Two things I found along the way are written up above rather than filed away:
+TrueForge does not currently start on Windows because of an upstream `import()`
+bug in kysely, and the approvals contract is clearer from the OpenAPI schema
+than from the docs. The fix for the first is in `scripts/patch-kysely-esm.mjs`
+and is offered back to anyone who hits it.
+
+The requirement that every substantive change go through a Qodo-reviewed pull
+request also earned its place. It caught two real bugs I would have shipped — an
+over-broad process kill, and a residual statistic averaged across regimes
+governed by different parameters, which had been quietly steering the search
+toward the wrong parameter.
